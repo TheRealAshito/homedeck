@@ -1,0 +1,77 @@
+# Homedeck
+
+A personal Android launcher for self-hosted services. Tiles open your
+dashboards in an in-app browser whose cookies, localStorage and cache live
+inside the app — sign in once and the session survives restarts.
+
+## Features
+
+- Tile dashboard: name, address, emoji icon (or the site's own favicon),
+  accent color, drag to reorder, duplicate, edit, remove.
+- In-app browser (not your phone's browser): keeps you inside the app,
+  with pull-to-refresh, loading progress, per-site back navigation,
+  file uploads, HTTP Basic auth, desktop-site toggle, share/copy link.
+- Sessions that stick: cookies, localStorage, IndexedDB and cache are
+  persisted per app and flushed on exit. Settings has an explicit
+  "clear cookies & site data" button — nothing is ever cleared silently.
+- Live status dots: each tile shows Online / Reachable / Offline based on
+  a lightweight probe of your own service (toggleable in Settings).
+- LAN-first: plain http:// addresses work, and self-signed certificates
+  show a one-time "Trust anyway" dialog remembered per host.
+- Material 3 design, dark/light/system theme, edge-to-edge.
+- Zero telemetry. No analytics SDKs, no CDN fonts or icons, no external
+  calls of any kind except to the services you add yourself.
+
+## Terminals and Docker
+
+Anything with a web UI works: Portainer, Dockge, Yacht, Proxmox, Grafana,
+Home Assistant, Uptime Kuma, Speedtest Tracker, and so on.
+
+For shell access, point a tile at a web terminal — ttyd, wetty or
+Guacamole — which speaks WebSockets and works inside the app:
+
+    ttyd -W -p 7681 -c user:pass bash
+
+For real SSH apps (Termux, ConnectBot), links with ssh:// open externally.
+
+## Build
+
+The toolchain (Temurin JDK 17, Android SDK 34, Gradle 8.8) installs into
+~/tools:
+
+    bash tools/setup-android-toolchain.sh
+
+Then build and sign a release APK:
+
+    export JAVA_HOME=~/tools/jdk17
+    export ANDROID_HOME=~/tools/android-sdk
+    export PATH="$JAVA_HOME/bin:~/tools/gradle-8.8/bin:$PATH"
+    gradle :app:assembleRelease
+
+Output: `app/build/outputs/apk/release/app-release.apk`
+
+Unit tests (tile storage, URL normalization, status classification):
+
+    gradle :app:test
+
+## Install
+
+    adb install -r app/build/outputs/apk/release/app-release.apk
+
+or copy the APK to the phone and open it (allow "install unknown apps"
+for your file manager when prompted).
+
+## Signing
+
+Release builds are signed with the keystore described in
+`keystore.properties` (git-ignored). Keep the keystore and its password
+safe — updating the app later over the installed one requires the same
+signing key. Without `keystore.properties` the build falls back to the
+debug key.
+
+## First run
+
+The dashboard starts with example tiles (Uptime Kuma, Speedtest Tracker,
+Terminal, Portainer, Grafana, Home Assistant) using `.lan` hostnames.
+Edit or remove them to match your network — long-press drag to reorder,
+the ⋮ button on each tile edits/duplicates/removes.

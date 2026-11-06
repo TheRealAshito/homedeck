@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="primary">#B4B9FF</color>
+    <color name="on_primary">#232C77</color>
+    <color name="primary_container">#37418F</color>
+    <color name="on_primary_container">#DFE2FF</color>
+    <color name="secondary">#8ADCCB</color>
+    <color name="on_secondary">#0B3B33</color>
+    <color name="secondary_container">#17564C</color>
+    <color name="on_secondary_container">#B2F1E2</color>
+    <color name="background">#0E1014</color>
+    <color name="on_background">#E2E3EC</color>
+    <color name="surface">#14171D</color>
+    <color name="on_surface">#E2E3EC</color>
+    <color name="surface_variant">#21242C</color>
+    <color name="on_surface_variant">#B7B9C6</color>
+    <color name="outline">#3A3D47</color>
+    <color name="outline_variant">#2A2E36</color>
+    <color name="error">#FFB4AB</color>
+    <color name="on_error">#690005</color>
+
+    <color name="status_online">#34D399</color>
+    <color name="status_degraded">#FBBF24</color>
+    <color name="status_offline">#F87171</color>
+    <color name="status_unknown">#6B7280</color>
+
+    <color name="ic_launcher_background">#37418F</color>
+</resources>

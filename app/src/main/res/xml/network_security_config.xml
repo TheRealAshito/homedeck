@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Homedeck talks to LAN services over plain HTTP and often behind
+     self-signed or private-CA certificates. Cleartext is permitted and
+     user-installed CAs are trusted; truly unknown certs still trigger the
+     in-app trust dialog (see WebViewActivity.onReceivedSslError). -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>
