@@ -5,7 +5,6 @@ import android.net.Uri
 import android.os.Bundle
 import android.view.View
 import android.widget.PopupMenu
-import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
@@ -35,7 +34,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var adapter: TileAdapter
     private lateinit var toolbar: MaterialToolbar
     private lateinit var swipe: SwipeRefreshLayout
-    private lateinit var emptyState: TextView
+    private lateinit var emptyState: View
     private val statusExecutor = Executors.newFixedThreadPool(4)
     private val tiles = mutableListOf<Tile>()
 
