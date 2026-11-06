@@ -38,6 +38,7 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.progressindicator.LinearProgressIndicator
 import com.therealashito.homedeck.data.SettingsStore
+import com.therealashito.homedeck.debug.AppLog
 import com.therealashito.homedeck.model.Tile
 import com.therealashito.homedeck.model.Urls
 
@@ -78,6 +79,7 @@ class WebViewActivity : AppCompatActivity() {
 
         entryUrl = intent.getStringExtra(EXTRA_URL) ?: run { finish(); return }
         initialName = intent.getStringExtra(EXTRA_NAME) ?: Urls.hostOf(entryUrl)
+        AppLog.i("WebView", "open ${Urls.hostOf(entryUrl)}")
 
         toolbar = findViewById(R.id.toolbar)
         progress = findViewById(R.id.progress)
@@ -87,6 +89,7 @@ class WebViewActivity : AppCompatActivity() {
         errorDetail = findViewById(R.id.errorDetail)
 
         toolbar.title = initialName
+        if (settings.debugMode) toolbar.subtitle = entryUrl
         toolbar.setNavigationOnClickListener { finish() }
         toolbar.inflateMenu(R.menu.menu_webview)
         toolbar.setOnMenuItemClickListener { item -> handleMenu(item.itemId); true }
@@ -303,6 +306,8 @@ class WebViewActivity : AppCompatActivity() {
         override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
             errorPanel.visibility = View.GONE
             swipe.isRefreshing = false
+            AppLog.d("WebView", "page started: $url")
+            if (settings.debugMode) toolbar.subtitle = url
         }
 
         override fun onReceivedError(
@@ -311,6 +316,7 @@ class WebViewActivity : AppCompatActivity() {
             error: WebResourceError
         ) {
             if (!request.isForMainFrame) return
+            AppLog.w("WebView", "load failed: ${request.url} (${error.description})")
             errorPanel.visibility = View.VISIBLE
             errorDetail.text = "${error.description}\n\n${request.url}"
         }
@@ -330,9 +336,13 @@ class WebViewActivity : AppCompatActivity() {
                 )
                 .setPositiveButton("Trust anyway") { _, _ ->
                     settings.trustHost(host)
+                    AppLog.i("WebView", "certificate accepted for $host")
                     handler.proceed()
                 }
-                .setNegativeButton("Go back") { _, _ -> handler.cancel() }
+                .setNegativeButton("Go back") { _, _ ->
+                    AppLog.w("WebView", "certificate rejected for $host")
+                    handler.cancel()
+                }
                 .setOnCancelListener { handler.cancel() }
                 .show()
         }
@@ -348,6 +358,7 @@ class WebViewActivity : AppCompatActivity() {
                 handler.proceed(stored[0], stored[1])
                 return
             }
+            AppLog.i("WebView", "http auth challenge for $host")
             showHttpAuthDialog(handler, host, realm)
         }
 

@@ -23,6 +23,15 @@ class SettingsStore(context: Context) {
         set(value) = prefs.edit().putBoolean(KEY_CACHE_FIRST, value).apply()
 
     /**
+     * Debug mode: verbose per-service detail, logging, and a startup guard
+     * that keeps the app open with a stack trace instead of crash-looping.
+     * Defaults to ON for the early development phase.
+     */
+    var debugMode: Boolean
+        get() = prefs.getBoolean(KEY_DEBUG, true)
+        set(value) = prefs.edit().putBoolean(KEY_DEBUG, value).apply()
+
+    /**
      * Hosts whose certificate the user explicitly accepted in the in-app
      * browser. Only these are exempted from certificate validation anywhere
      * else in the app (e.g. the dashboard status checker).
@@ -41,6 +50,7 @@ class SettingsStore(context: Context) {
         const val KEY_THEME = "theme_mode"
         const val KEY_STATUS_CHECKS = "status_checks"
         const val KEY_CACHE_FIRST = "cache_first"
+        const val KEY_DEBUG = "debug_mode"
         const val KEY_TRUSTED_HOSTS = "trusted_hosts"
     }
 }

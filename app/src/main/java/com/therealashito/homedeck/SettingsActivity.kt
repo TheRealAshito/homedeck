@@ -1,5 +1,6 @@
 package com.therealashito.homedeck
 
+import android.content.Intent
 import android.os.Bundle
 import android.webkit.CookieManager
 import android.webkit.WebStorage
@@ -16,6 +17,7 @@ import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.materialswitch.MaterialSwitch
 import com.therealashito.homedeck.data.SettingsStore
+import com.therealashito.homedeck.debug.AppLog
 import java.io.File
 
 class SettingsActivity : AppCompatActivity() {
@@ -26,7 +28,9 @@ class SettingsActivity : AppCompatActivity() {
         setContentView(R.layout.activity_settings)
         val settings = SettingsStore(this)
 
-        findViewById<MaterialToolbar>(R.id.toolbar).setNavigationOnClickListener { finish() }
+        val toolbar = findViewById<MaterialToolbar>(R.id.toolbar)
+        toolbar.setNavigationOnClickListener { finish() }
+        toolbar.subtitle = if (settings.debugMode) "debug mode" else "normal mode"
 
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.root)) { v, insets ->
             val bars = insets.getInsets(
@@ -63,6 +67,18 @@ class SettingsActivity : AppCompatActivity() {
         cacheSwitch.isChecked = settings.cacheFirst
         cacheSwitch.setOnCheckedChangeListener { _, checked -> settings.cacheFirst = checked }
 
+        val debugSwitch = findViewById<MaterialSwitch>(R.id.debugSwitch)
+        debugSwitch.isChecked = settings.debugMode
+        debugSwitch.setOnCheckedChangeListener { _, checked ->
+            settings.debugMode = checked
+            AppLog.i("Settings", "debug mode=$checked")
+            toolbar.subtitle = if (checked) "debug mode" else "normal mode"
+        }
+
+        findViewById<MaterialButton>(R.id.diagnosticsBtn).setOnClickListener {
+            startActivity(Intent(this, DiagnosticsActivity::class.java))
+        }
+
         findViewById<MaterialButton>(R.id.clearDataBtn).setOnClickListener {
             MaterialAlertDialogBuilder(this)
                 .setTitle("Clear cookies & site data?")
@@ -83,6 +99,7 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun clearBrowsingData() {
+        AppLog.i("Settings", "clearing cookies and site data")
         val cookieManager = CookieManager.getInstance()
         cookieManager.removeAllCookies(null)
         cookieManager.flush()

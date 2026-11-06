@@ -2,26 +2,34 @@ package com.therealashito.homedeck.net
 
 import com.therealashito.homedeck.data.SettingsStore
 import com.therealashito.homedeck.model.Urls
+import java.io.IOException
+import java.net.ConnectException
 import java.net.HttpURLConnection
 import java.net.InetSocketAddress
 import java.net.Socket
+import java.net.SocketTimeoutException
 import java.net.URL
+import java.net.UnknownHostException
 import java.security.SecureRandom
 import java.security.cert.X509Certificate
 import javax.net.ssl.HostnameVerifier
 import javax.net.ssl.SSLContext
+import javax.net.ssl.SSLException
 import javax.net.ssl.SSLSocketFactory
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
 
 /**
- * Lightweight reachability probe used for the tile status dots. HTTP first
- * (so 5xx shows as degraded), then a plain TCP connect as fallback so
- * services behind self-signed certs still light up.
+ * Lightweight reachability probe used for the tile status dots and the
+ * Diagnostics screen. HTTP first (so 5xx shows as degraded), then a plain
+ * TCP connect as fallback so services behind self-signed certs still light
+ * up. Every result carries a plain-language detail string for debug mode.
  */
 object StatusChecker {
 
     enum class Status { ONLINE, DEGRADED, OFFLINE, UNKNOWN }
+
+    data class Probe(val status: Status, val detail: String, val elapsedMs: Long)
 
     /** Pure classification, unit tested. 4xx still means "service is up". */
     fun classify(code: Int): Status = when {
@@ -30,14 +38,24 @@ object StatusChecker {
         else -> Status.UNKNOWN
     }
 
-    fun check(url: String, trustedHosts: Set<String> = emptySet(), timeoutMs: Int = 3000): Status {
-        val http = checkHttp(url, trustedHosts, timeoutMs)
-        if (http != null) return http
-        return if (tcpReachable(url, timeoutMs)) Status.DEGRADED else Status.OFFLINE
+    /** Plain-language reason for a failed probe, unit tested. */
+    fun describeFailure(error: Exception?): String = when (error) {
+        is UnknownHostException -> "host not found"
+        is SocketTimeoutException -> "timed out"
+        is ConnectException -> "connection refused"
+        is SSLException -> "TLS certificate rejected"
+        is IOException -> error.message?.take(60) ?: "network error"
+        else -> error?.message?.take(60) ?: "no response"
     }
 
-    private fun checkHttp(url: String, trustedHosts: Set<String>, timeoutMs: Int): Status? {
-        return try {
+    fun probe(
+        url: String,
+        trustedHosts: Set<String> = emptySet(),
+        timeoutMs: Int = 3000
+    ): Probe {
+        val started = System.currentTimeMillis()
+        var failure: Exception? = null
+        try {
             val host = Urls.hostOf(url)
             val permissive = trustedHosts.contains(host)
             val conn = URL(url).openConnection() as HttpURLConnection
@@ -51,12 +69,19 @@ object StatusChecker {
                 conn.hostnameVerifier = permissiveHostnameVerifier
             }
             try {
-                classify(conn.responseCode)
+                val code = conn.responseCode
+                return Probe(classify(code), "HTTP $code", System.currentTimeMillis() - started)
             } finally {
                 conn.disconnect()
             }
         } catch (e: Exception) {
-            null
+            failure = e
+        }
+        val elapsed = System.currentTimeMillis() - started
+        return if (tcpReachable(url, timeoutMs)) {
+            Probe(Status.DEGRADED, "TCP reachable, HTTP failed: ${describeFailure(failure)}", elapsed)
+        } else {
+            Probe(Status.OFFLINE, describeFailure(failure), elapsed)
         }
     }
 

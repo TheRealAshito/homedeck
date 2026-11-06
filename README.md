@@ -61,6 +61,26 @@ Unit tests (tile storage, URL normalization, status classification):
 or copy the APK to the phone and open it (allow "install unknown apps"
 for your file manager when prompted).
 
+## Debug mode & diagnostics
+
+Early development phase default: the app starts in **debug mode**.
+
+- **Toggle**: Settings -> Debug mode. On = status dots show the real reason
+  ("HTTP 200, 340ms", "connection refused", "TLS certificate rejected"),
+  the dashboard subtitle is prefixed DEBUG, the in-app browser shows the
+  current URL, and logging runs. Off = clean everyday UI.
+- **Self-diagnosis**: the ⓘ button on the dashboard toolbar or
+  Settings -> Open diagnostics. Runs local checks (storage, tile data,
+  cookie/session store, WebView engine, every added service, crash history)
+  with pass/warn/fail detail and timing, plus a log tail. Copy or share the
+  report — it never leaves the device on its own.
+- **Logging + crash capture**: crashes are written to the app's private
+  storage and shown in Diagnostics, so a broken build explains itself on the
+  next launch. In debug mode a startup failure keeps the app open showing the
+  stack trace instead of crash-looping.
+- **Privacy unchanged**: no analytics, no telemetry; the only network
+  traffic is probing the services you added yourself.
+
 ## Signing
 
 Release builds are signed with the keystore described in

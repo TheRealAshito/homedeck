@@ -5,6 +5,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.therealashito.homedeck.model.Tile
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
@@ -72,5 +73,22 @@ class StartupSmokeTest {
         val activity = controller.get()
         layOut(activity)
         assertNotNull(activity.findViewById(R.id.themeGroup))
+    }
+
+    @Test
+    fun diagnosticsActivityLaunchesAndLocalChecksPass() {
+        val controller = Robolectric.buildActivity(DiagnosticsActivity::class.java).setup()
+        val activity = controller.get()
+        layOut(activity)
+        assertNotNull(activity.findViewById(R.id.runBtn))
+
+        val results = com.therealashito.homedeck.debug.DiagnosticsRunner(activity)
+            .runAll(includeNetwork = false)
+        assertTrue(results.isNotEmpty())
+        assertTrue(results.any { it.name == "Tile store" })
+        val failures = results.filter {
+            it.status == com.therealashito.homedeck.debug.DiagResult.Status.FAIL
+        }
+        assertEquals("unexpected failures: $failures", 0, failures.size)
     }
 }

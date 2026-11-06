@@ -5,6 +5,8 @@ import android.net.Uri
 import android.os.Bundle
 import android.view.View
 import android.widget.PopupMenu
+import android.widget.ScrollView
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
@@ -20,6 +22,7 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
 import com.therealashito.homedeck.data.SettingsStore
 import com.therealashito.homedeck.data.TileStore
+import com.therealashito.homedeck.debug.AppLog
 import com.therealashito.homedeck.model.Tile
 import com.therealashito.homedeck.net.StatusChecker
 import com.therealashito.homedeck.ui.TileAdapter
@@ -37,6 +40,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var emptyState: View
     private val statusExecutor = Executors.newFixedThreadPool(4)
     private val tiles = mutableListOf<Tile>()
+    private var dashboardReady = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -44,8 +48,17 @@ class MainActivity : AppCompatActivity() {
         settings = SettingsStore(this)
         AppCompatDelegate.setDefaultNightMode(settings.themeMode)
         enableEdgeToEdge()
-        setContentView(R.layout.activity_main)
+        try {
+            setContentView(R.layout.activity_main)
+            setupDashboard()
+            AppLog.i("Main", "Dashboard ready (${tiles.size} tiles, debug=${settings.debugMode})")
+        } catch (t: Throwable) {
+            AppLog.e("Main", "Startup failed", t)
+            if (settings.debugMode) showStartupError(t) else throw t
+        }
+    }
 
+    private fun setupDashboard() {
         toolbar = findViewById(R.id.toolbar)
         swipe = findViewById(R.id.swipe)
         emptyState = findViewById(R.id.emptyState)
@@ -97,16 +110,20 @@ class MainActivity : AppCompatActivity() {
         fab.setOnClickListener { EditTileActivity.start(this) }
 
         toolbar.inflateMenu(R.menu.menu_main)
+        toolbar.menu.findItem(R.id.action_diagnostics)?.isVisible = settings.debugMode
         toolbar.setOnMenuItemClickListener { item ->
             when (item.itemId) {
                 R.id.action_settings -> startActivity(Intent(this, SettingsActivity::class.java))
+                R.id.action_diagnostics -> startActivity(Intent(this, DiagnosticsActivity::class.java))
             }
             true
         }
+        dashboardReady = true
     }
 
     override fun onResume() {
         super.onResume()
+        if (!dashboardReady) return
         reload()
     }
 
@@ -119,6 +136,7 @@ class MainActivity : AppCompatActivity() {
         tiles.clear()
         tiles.addAll(tileStore.load())
         adapter.statusChecksEnabled = settings.statusChecks
+        adapter.debugMode = settings.debugMode
         adapter.submit(tiles)
         emptyState.visibility = if (tiles.isEmpty()) View.VISIBLE else View.GONE
         updateSubtitle()
@@ -126,11 +144,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateSubtitle() {
+        val prefix = if (settings.debugMode) "DEBUG \u00B7 " else ""
         toolbar.subtitle = if (settings.statusChecks) {
-            val online = tiles.count { adapter.statuses[it.id] == StatusChecker.Status.ONLINE }
-            "${tiles.size} services \u00B7 $online online"
+            val online = tiles.count { adapter.statuses[it.id]?.status == StatusChecker.Status.ONLINE }
+            "$prefix${tiles.size} services \u00B7 $online online"
         } else {
-            "${tiles.size} services"
+            "$prefix${tiles.size} services"
         }
     }
 
@@ -150,7 +169,7 @@ class MainActivity : AppCompatActivity() {
         val trusted = settings.trustedHosts()
         for (tile in snapshot) {
             statusExecutor.execute {
-                val status = StatusChecker.check(tile.url, trusted)
+                val status = StatusChecker.probe(tile.url, trusted)
                 runOnUiThread {
                     adapter.setStatus(tile.id, status)
                     if (remaining.decrementAndGet() == 0) {
@@ -207,6 +226,20 @@ class MainActivity : AppCompatActivity() {
             }
             .setNegativeButton("Cancel", null)
             .show()
+    }
+
+    private fun showStartupError(t: Throwable) {
+        val scroll = ScrollView(this)
+        val text = TextView(this).apply {
+            setPadding(32, 48, 32, 32)
+            text = "Homedeck failed to start, but debug mode kept it open.\n\n" +
+                t.stackTraceToString().take(4000) +
+                "\n\nCopy this from Diagnostics > Log tail into the bug report."
+            setTextIsSelectable(true)
+            textSize = 12f
+        }
+        scroll.addView(text)
+        setContentView(scroll)
     }
 
     companion object {

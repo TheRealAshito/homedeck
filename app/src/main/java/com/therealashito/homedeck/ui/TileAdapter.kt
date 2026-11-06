@@ -26,8 +26,9 @@ class TileAdapter(
 ) : RecyclerView.Adapter<TileAdapter.Holder>() {
 
     val tiles = mutableListOf<Tile>()
-    val statuses = mutableMapOf<String, StatusChecker.Status>()
+    val statuses = mutableMapOf<String, StatusChecker.Probe>()
     var statusChecksEnabled = true
+    var debugMode = false
 
     fun submit(newTiles: List<Tile>) {
         tiles.clear()
@@ -43,7 +44,7 @@ class TileAdapter(
         notifyItemMoved(from, to)
     }
 
-    fun setStatus(id: String, status: StatusChecker.Status) {
+    fun setStatus(id: String, status: StatusChecker.Probe) {
         statuses[id] = status
         val index = tiles.indexOfFirst { it.id == id }
         if (index >= 0) notifyItemChanged(index)
@@ -113,15 +114,15 @@ class TileAdapter(
         }
 
         private fun bindStatus(tile: Tile) {
-            val status = statuses[tile.id]
-            if (!statusChecksEnabled || status == null) {
+            val probe = statuses[tile.id]
+            if (!statusChecksEnabled || probe == null) {
                 statusDot.visibility = View.GONE
                 statusText.visibility = View.GONE
                 return
             }
             statusDot.visibility = View.VISIBLE
             statusText.visibility = View.VISIBLE
-            val (colorRes, label) = when (status) {
+            val (colorRes, label) = when (probe.status) {
                 StatusChecker.Status.ONLINE -> R.color.status_online to "Online"
                 StatusChecker.Status.DEGRADED -> R.color.status_degraded to "Reachable"
                 StatusChecker.Status.OFFLINE -> R.color.status_offline to "Offline"
@@ -131,7 +132,7 @@ class TileAdapter(
                 shape = GradientDrawable.OVAL
                 setColor(ContextCompat.getColor(itemView.context, colorRes))
             }
-            statusText.text = label
+            statusText.text = if (debugMode) probe.detail else label
         }
     }
 }
