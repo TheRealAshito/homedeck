@@ -18,6 +18,7 @@
             android:paddingEnd="2dp"
             app:navigationContentDescription="Close"
             app:navigationIcon="@drawable/ic_close"
+            app:navigationIconTint="?attr/colorOnSurface"
             app:titleTextAppearance="?attr/textAppearanceTitleLarge" />
 
         <FrameLayout

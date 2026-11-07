@@ -81,6 +81,20 @@ Early development phase default: the app starts in **debug mode**.
 - **Privacy unchanged**: no analytics, no telemetry; the only network
   traffic is probing the services you added yourself.
 
+## Updates
+
+The app can check this repo's public GitHub releases for a newer version —
+the only network request it makes that is not one of your own services. It
+reads public release metadata and sends nothing else (documented here as the
+deliberate exception to the zero-external-calls promise).
+
+- Settings -> "Check for updates": one-off check whenever you want.
+- Settings -> "Check automatically": OFF by default (opt-in, per the no
+  phone-home rule); when on, checks at most once a day while the dashboard
+  is open and shows a Download snackbar when something newer exists.
+- Downloading opens the release APK in the browser; install over the old
+  version as usual.
+
 ## Signing
 
 Release builds are signed with the keystore described in

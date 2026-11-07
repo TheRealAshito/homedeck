@@ -12,6 +12,7 @@
         android:layout_height="wrap_content"
         app:navigationContentDescription="Back"
         app:navigationIcon="@drawable/ic_arrow_back"
+        app:navigationIconTint="?attr/colorOnSurface"
         app:titleTextAppearance="?attr/textAppearanceTitleLarge" />
 
     <ScrollView

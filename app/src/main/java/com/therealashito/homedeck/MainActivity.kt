@@ -20,11 +20,13 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
+import com.google.android.material.snackbar.Snackbar
 import com.therealashito.homedeck.data.SettingsStore
 import com.therealashito.homedeck.data.TileStore
 import com.therealashito.homedeck.debug.AppLog
 import com.therealashito.homedeck.model.Tile
 import com.therealashito.homedeck.net.StatusChecker
+import com.therealashito.homedeck.net.UpdateChecker
 import com.therealashito.homedeck.ui.TileAdapter
 import java.util.UUID
 import java.util.concurrent.Executors
@@ -125,6 +127,38 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         if (!dashboardReady) return
         reload()
+        maybeCheckForUpdates()
+    }
+
+    /**
+     * Opt-in update check (Settings), throttled to once a day. Only shows a
+     * snackbar when a newer release actually exists.
+     */
+    private fun maybeCheckForUpdates() {
+        if (!settings.autoUpdateCheck) return
+        val now = System.currentTimeMillis()
+        if (now - settings.lastUpdateCheckMs < UPDATE_CHECK_INTERVAL_MS) return
+        settings.lastUpdateCheckMs = now
+        val current = try {
+            packageManager.getPackageInfo(packageName, 0).versionName ?: ""
+        } catch (e: Exception) {
+            ""
+        }
+        statusExecutor.execute {
+            val release = UpdateChecker.fetchLatest()
+            if (release != null && UpdateChecker.isNewer(release.tag, current)) {
+                runOnUiThread {
+                    AppLog.i("Main", "update available: ${release.tag} (installed: $current)")
+                    Snackbar.make(
+                        findViewById(R.id.root),
+                        "Update ${release.tag} is available",
+                        Snackbar.LENGTH_LONG
+                    ).setAction("Download") {
+                        UpdateChecker.openRelease(this, release)
+                    }.show()
+                }
+            }
+        }
     }
 
     override fun onDestroy() {
@@ -243,6 +277,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     companion object {
+        private const val UPDATE_CHECK_INTERVAL_MS = 24L * 60 * 60 * 1000
         private const val MENU_EDIT = 1
         private const val MENU_BROWSER = 2
         private const val MENU_DUPLICATE = 3

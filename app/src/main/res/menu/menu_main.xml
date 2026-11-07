@@ -6,11 +6,13 @@
         android:id="@+id/action_diagnostics"
         android:icon="@drawable/ic_info"
         android:title="Diagnostics"
+        app:iconTint="?attr/colorOnSurface"
         app:showAsAction="ifRoom" />
 
     <item
         android:id="@+id/action_settings"
         android:icon="@drawable/ic_settings"
         android:title="Settings"
+        app:iconTint="?attr/colorOnSurface"
         app:showAsAction="always" />
 </menu>

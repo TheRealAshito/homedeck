@@ -32,6 +32,19 @@ class SettingsStore(context: Context) {
         set(value) = prefs.edit().putBoolean(KEY_DEBUG, value).apply()
 
     /**
+     * Automatic update checks against the app's own GitHub repo. Opt-in and
+     * OFF by default (privacy standing rule); the manual Settings button
+     * works regardless. Throttled to at most one check per day.
+     */
+    var autoUpdateCheck: Boolean
+        get() = prefs.getBoolean(KEY_AUTO_UPDATE, false)
+        set(value) = prefs.edit().putBoolean(KEY_AUTO_UPDATE, value).apply()
+
+    var lastUpdateCheckMs: Long
+        get() = prefs.getLong(KEY_LAST_UPDATE_CHECK, 0L)
+        set(value) = prefs.edit().putLong(KEY_LAST_UPDATE_CHECK, value).apply()
+
+    /**
      * Hosts whose certificate the user explicitly accepted in the in-app
      * browser. Only these are exempted from certificate validation anywhere
      * else in the app (e.g. the dashboard status checker).
@@ -51,6 +64,8 @@ class SettingsStore(context: Context) {
         const val KEY_STATUS_CHECKS = "status_checks"
         const val KEY_CACHE_FIRST = "cache_first"
         const val KEY_DEBUG = "debug_mode"
+        const val KEY_AUTO_UPDATE = "auto_update_check"
+        const val KEY_LAST_UPDATE_CHECK = "last_update_check_ms"
         const val KEY_TRUSTED_HOSTS = "trusted_hosts"
     }
 }

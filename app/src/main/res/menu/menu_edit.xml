@@ -6,5 +6,6 @@
         android:id="@+id/action_save"
         android:icon="@drawable/ic_check"
         android:title="Save"
+        app:iconTint="?attr/colorOnSurface"
         app:showAsAction="always" />
 </menu>

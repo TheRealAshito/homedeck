@@ -2,6 +2,7 @@ package com.therealashito.homedeck
 
 import android.content.Intent
 import android.os.Bundle
+import android.view.View
 import android.webkit.CookieManager
 import android.webkit.WebStorage
 import android.widget.TextView
@@ -18,6 +19,7 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.materialswitch.MaterialSwitch
 import com.therealashito.homedeck.data.SettingsStore
 import com.therealashito.homedeck.debug.AppLog
+import com.therealashito.homedeck.net.UpdateChecker
 import java.io.File
 
 class SettingsActivity : AppCompatActivity() {
@@ -67,6 +69,46 @@ class SettingsActivity : AppCompatActivity() {
         cacheSwitch.isChecked = settings.cacheFirst
         cacheSwitch.setOnCheckedChangeListener { _, checked -> settings.cacheFirst = checked }
 
+        val autoUpdateSwitch = findViewById<MaterialSwitch>(R.id.autoUpdateSwitch)
+        autoUpdateSwitch.isChecked = settings.autoUpdateCheck
+        autoUpdateSwitch.setOnCheckedChangeListener { _, checked ->
+            settings.autoUpdateCheck = checked
+            AppLog.i("Settings", "auto update check=$checked")
+        }
+
+        val updateResult = findViewById<TextView>(R.id.updateResultText)
+        findViewById<MaterialButton>(R.id.checkUpdateBtn).setOnClickListener {
+            updateResult.visibility = View.VISIBLE
+            updateResult.text = "Checking GitHub\u2026"
+            Thread {
+                val release = UpdateChecker.fetchLatest()
+                runOnUiThread {
+                    val current = currentVersion()
+                    when {
+                        release == null -> {
+                            updateResult.text =
+                                "Could not reach GitHub. Check the connection or see Diagnostics."
+                        }
+                        UpdateChecker.isNewer(release.tag, current) -> {
+                            updateResult.text =
+                                "Update available: ${release.tag} (installed: $current)"
+                            MaterialAlertDialogBuilder(this@SettingsActivity)
+                                .setTitle("Update ${release.tag} available")
+                                .setMessage("You have $current installed. Open the download page?")
+                                .setPositiveButton("Download") { _, _ ->
+                                    UpdateChecker.openRelease(this@SettingsActivity, release)
+                                }
+                                .setNegativeButton("Later", null)
+                                .show()
+                        }
+                        else -> {
+                            updateResult.text = "Up to date (installed: $current)."
+                        }
+                    }
+                }
+            }.start()
+        }
+
         val debugSwitch = findViewById<MaterialSwitch>(R.id.debugSwitch)
         debugSwitch.isChecked = settings.debugMode
         debugSwitch.setOnCheckedChangeListener { _, checked ->
@@ -96,6 +138,12 @@ class SettingsActivity : AppCompatActivity() {
         findViewById<TextView>(R.id.aboutText).text =
             "Homedeck $version\nCookies, logins and cache stay on this device. " +
                 "No analytics, no telemetry, no calls to anything except the services you add."
+    }
+
+    private fun currentVersion(): String = try {
+        packageManager.getPackageInfo(packageName, 0).versionName ?: "0"
+    } catch (e: Exception) {
+        "0"
     }
 
     private fun clearBrowsingData() {
