@@ -10,9 +10,22 @@ class SettingsStore(context: Context) {
     private val prefs: SharedPreferences =
         context.applicationContext.getSharedPreferences("homedeck.settings", Context.MODE_PRIVATE)
 
-    var themeMode: Int
-        get() = prefs.getInt(KEY_THEME, AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM)
-        set(value) = prefs.edit().putInt(KEY_THEME, value).apply()
+    /**
+     * UI theme: SYSTEM / DARK / LIGHT / AMOLED (pure black). Migrates the
+     * old AppCompatDelegate-int based key on first read.
+     */
+    var uiTheme: Int
+        get() {
+            if (prefs.contains(KEY_UI_THEME)) return prefs.getInt(KEY_UI_THEME, THEME_SYSTEM)
+            val migrated = when (prefs.getInt(KEY_THEME, AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM)) {
+                AppCompatDelegate.MODE_NIGHT_YES -> THEME_DARK
+                AppCompatDelegate.MODE_NIGHT_NO -> THEME_LIGHT
+                else -> THEME_SYSTEM
+            }
+            prefs.edit().putInt(KEY_UI_THEME, migrated).apply()
+            return migrated
+        }
+        set(value) = prefs.edit().putInt(KEY_UI_THEME, value).apply()
 
     var statusChecks: Boolean
         get() = prefs.getBoolean(KEY_STATUS_CHECKS, true)
@@ -60,7 +73,19 @@ class SettingsStore(context: Context) {
     }
 
     companion object {
+        const val THEME_SYSTEM = 0
+        const val THEME_DARK = 1
+        const val THEME_LIGHT = 2
+        const val THEME_AMOLED = 3
+
+        fun nightModeFor(uiTheme: Int): Int = when (uiTheme) {
+            THEME_DARK, THEME_AMOLED -> AppCompatDelegate.MODE_NIGHT_YES
+            THEME_LIGHT -> AppCompatDelegate.MODE_NIGHT_NO
+            else -> AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
+        }
+
         const val KEY_THEME = "theme_mode"
+        const val KEY_UI_THEME = "ui_theme"
         const val KEY_STATUS_CHECKS = "status_checks"
         const val KEY_CACHE_FIRST = "cache_first"
         const val KEY_DEBUG = "debug_mode"

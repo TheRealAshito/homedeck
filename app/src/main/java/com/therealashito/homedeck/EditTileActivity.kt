@@ -24,7 +24,7 @@ import com.therealashito.homedeck.ui.Palette
 import java.util.UUID
 
 /** Create or edit one dashboard tile. */
-class EditTileActivity : AppCompatActivity() {
+class EditTileActivity : ThemedActivity() {
 
     private lateinit var tileStore: TileStore
     private lateinit var nameLayout: TextInputLayout

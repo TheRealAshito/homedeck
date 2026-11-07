@@ -31,7 +31,7 @@ import java.util.concurrent.Executors
  * plain-language detail, and lets the user copy or share the report and log.
  * Everything stays on the device unless the user explicitly shares it.
  */
-class DiagnosticsActivity : AppCompatActivity() {
+class DiagnosticsActivity : ThemedActivity() {
 
     private lateinit var resultsContainer: LinearLayout
     private lateinit var logView: TextView

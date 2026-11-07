@@ -1,100 +1,95 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/root"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <LinearLayout
+    <!-- Slim 48dp header that scrolls away while reading and returns on any
+         upward scroll (scroll|enterAlways|snap). -->
+    <com.google.android.material.appbar.AppBarLayout
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:orientation="vertical">
+        android:layout_height="wrap_content">
 
         <com.google.android.material.appbar.MaterialToolbar
             android:id="@+id/toolbar"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:minHeight="48dp"
             android:paddingStart="2dp"
             android:paddingEnd="2dp"
+            app:layout_scrollFlags="scroll|enterAlways|snap"
             app:navigationContentDescription="Close"
             app:navigationIcon="@drawable/ic_close"
             app:navigationIconTint="?attr/colorOnSurface"
-            app:titleTextAppearance="?attr/textAppearanceTitleLarge" />
+            app:subtitleTextAppearance="?attr/textAppearanceBodySmall"
+            app:titleMarginStart="2dp"
+            app:titleTextAppearance="?attr/textAppearanceTitleMedium" />
 
-        <FrameLayout
+        <com.google.android.material.progressindicator.LinearProgressIndicator
+            android:id="@+id/progress"
             android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_weight="1">
+            android:layout_height="wrap_content"
+            android:indeterminate="true"
+            app:trackCornerRadius="0dp"
+            app:trackThickness="2dp" />
+    </com.google.android.material.appbar.AppBarLayout>
 
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:orientation="vertical">
+    <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+        android:id="@+id/swipe"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior">
 
-                <com.google.android.material.progressindicator.LinearProgressIndicator
-                    android:id="@+id/progress"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:indeterminate="true"
-                    app:trackCornerRadius="0dp"
-                    app:trackThickness="3dp" />
+        <WebView
+            android:id="@+id/webview"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+    </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
 
-                <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
-                    android:id="@+id/swipe"
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent">
+    <LinearLayout
+        android:id="@+id/errorPanel"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="?android:colorBackground"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:padding="28dp"
+        android:visibility="gone"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior">
 
-                    <WebView
-                        android:id="@+id/webview"
-                        android:layout_width="match_parent"
-                        android:layout_height="match_parent" />
-                </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
-            </LinearLayout>
+        <ImageView
+            android:layout_width="64dp"
+            android:layout_height="64dp"
+            android:contentDescription="Error"
+            android:src="@drawable/ic_cloud_off"
+            app:tint="?attr/colorOnSurfaceVariant" />
 
-            <LinearLayout
-                android:id="@+id/errorPanel"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:background="?android:colorBackground"
-                android:gravity="center"
-                android:orientation="vertical"
-                android:padding="28dp"
-                android:visibility="gone">
+        <TextView
+            android:id="@+id/errorTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:gravity="center"
+            android:text="Can't reach this service"
+            android:textAppearance="?attr/textAppearanceTitleLarge"
+            android:textColor="?attr/colorOnSurface" />
 
-                <ImageView
-                    android:layout_width="64dp"
-                    android:layout_height="64dp"
-                    android:contentDescription="Error"
-                    android:src="@drawable/ic_cloud_off"
-                    app:tint="?attr/colorOnSurfaceVariant" />
+        <TextView
+            android:id="@+id/errorDetail"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:gravity="center"
+            android:textAppearance="?attr/textAppearanceBodyMedium"
+            android:textColor="?attr/colorOnSurfaceVariant" />
 
-                <TextView
-                    android:id="@+id/errorTitle"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="16dp"
-                    android:gravity="center"
-                    android:text="Can't reach this service"
-                    android:textAppearance="?attr/textAppearanceTitleLarge"
-                    android:textColor="?attr/colorOnSurface" />
-
-                <TextView
-                    android:id="@+id/errorDetail"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:gravity="center"
-                    android:textAppearance="?attr/textAppearanceBodyMedium"
-                    android:textColor="?attr/colorOnSurfaceVariant" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/retryBtn"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="20dp"
-                    android:text="Try again"
-                    app:icon="@drawable/ic_refresh" />
-            </LinearLayout>
-        </FrameLayout>
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/retryBtn"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="Try again"
+            app:icon="@drawable/ic_refresh" />
     </LinearLayout>
-</FrameLayout>
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

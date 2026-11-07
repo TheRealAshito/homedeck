@@ -47,7 +47,7 @@ import com.therealashito.homedeck.model.Urls
  * this app's data directory, so sign-in sessions survive restarts until the
  * user clears them in Settings.
  */
-class WebViewActivity : AppCompatActivity() {
+class WebViewActivity : ThemedActivity() {
 
     private lateinit var settings: SettingsStore
     private lateinit var toolbar: MaterialToolbar

@@ -22,7 +22,7 @@ import com.therealashito.homedeck.debug.AppLog
 import com.therealashito.homedeck.net.UpdateChecker
 import java.io.File
 
-class SettingsActivity : AppCompatActivity() {
+class SettingsActivity : ThemedActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -44,21 +44,33 @@ class SettingsActivity : AppCompatActivity() {
 
         val themeGroup = findViewById<MaterialButtonToggleGroup>(R.id.themeGroup)
         themeGroup.check(
-            when (settings.themeMode) {
-                AppCompatDelegate.MODE_NIGHT_YES -> R.id.themeDark
-                AppCompatDelegate.MODE_NIGHT_NO -> R.id.themeLight
+            when (settings.uiTheme) {
+                SettingsStore.THEME_DARK -> R.id.themeDark
+                SettingsStore.THEME_LIGHT -> R.id.themeLight
+                SettingsStore.THEME_AMOLED -> R.id.themeAmoled
                 else -> R.id.themeSystem
             }
         )
         themeGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
             if (!isChecked) return@addOnButtonCheckedListener
-            val mode = when (checkedId) {
-                R.id.themeDark -> AppCompatDelegate.MODE_NIGHT_YES
-                R.id.themeLight -> AppCompatDelegate.MODE_NIGHT_NO
-                else -> AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
+            val newTheme = when (checkedId) {
+                R.id.themeDark -> SettingsStore.THEME_DARK
+                R.id.themeLight -> SettingsStore.THEME_LIGHT
+                R.id.themeAmoled -> SettingsStore.THEME_AMOLED
+                else -> SettingsStore.THEME_SYSTEM
             }
-            settings.themeMode = mode
-            AppCompatDelegate.setDefaultNightMode(mode)
+            if (newTheme == settings.uiTheme) return@addOnButtonCheckedListener
+            val oldNight = SettingsStore.nightModeFor(settings.uiTheme)
+            settings.uiTheme = newTheme
+            AppLog.i("Settings", "theme=$newTheme")
+            val newNight = SettingsStore.nightModeFor(newTheme)
+            // Night-mode changes recreate via the delegate; pure overlay
+            // changes (Dark <-> AMOLED) need an explicit recreate.
+            if (oldNight == newNight) {
+                recreate()
+            } else {
+                AppCompatDelegate.setDefaultNightMode(newNight)
+            }
         }
 
         val statusSwitch = findViewById<MaterialSwitch>(R.id.statusSwitch)

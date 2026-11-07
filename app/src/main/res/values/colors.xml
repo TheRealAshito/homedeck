@@ -24,5 +24,11 @@
     <color name="status_offline">#DC2626</color>
     <color name="status_unknown">#9CA3AF</color>
 
+    <color name="amoled_background">#FF000000</color>
+    <color name="amoled_surface">#FF000000</color>
+    <color name="amoled_surface_variant">#FF101012</color>
+    <color name="amoled_outline">#FF26262B</color>
+    <color name="amoled_outline_variant">#FF1A1A1E</color>
+
     <color name="ic_launcher_background">#4F5BD5</color>
 </resources>

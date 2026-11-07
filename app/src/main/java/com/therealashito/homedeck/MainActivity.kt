@@ -9,8 +9,6 @@ import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
-import androidx.appcompat.app.AppCompatActivity
-import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.recyclerview.widget.GridLayoutManager
@@ -32,7 +30,7 @@ import java.util.UUID
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : ThemedActivity() {
 
     private lateinit var tileStore: TileStore
     private lateinit var settings: SettingsStore
@@ -48,7 +46,6 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         tileStore = TileStore(this)
         settings = SettingsStore(this)
-        AppCompatDelegate.setDefaultNightMode(settings.themeMode)
         enableEdgeToEdge()
         try {
             setContentView(R.layout.activity_main)

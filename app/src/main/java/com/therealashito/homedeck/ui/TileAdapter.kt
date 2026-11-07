@@ -77,15 +77,14 @@ class TileAdapter(
 
         fun bind(tile: Tile) {
             val accent = Palette.color(tile.colorIndex)
-            val chipColor = Palette.withAlpha(accent, 0x2E)
 
             title.text = tile.name
             host.text = Urls.hostOf(tile.url)
 
             val chipShape = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
-                cornerRadius = Palette.dp(itemView.context, 13f).toFloat()
-                setColor(chipColor)
+                cornerRadius = Palette.dp(itemView.context, 15f).toFloat()
+                setColor(Palette.withAlpha(accent, 0x38))
             }
             emojiChip.background = chipShape
             favicon.background = chipShape.constantState?.newDrawable()?.mutate()

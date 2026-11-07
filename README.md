@@ -6,11 +6,13 @@ inside the app — sign in once and the session survives restarts.
 
 ## Features
 
-- Tile dashboard: name, address, emoji icon (or the site's own favicon),
-  accent color, drag to reorder, duplicate, edit, remove.
+- Tile dashboard: name, address, a large emoji icon picked from a 90+ icon
+  grid (or the site's own favicon), accent color, drag to reorder,
+  duplicate, edit, remove.
 - In-app browser (not your phone's browser): keeps you inside the app,
-  with pull-to-refresh, loading progress, per-site back navigation,
-  file uploads, HTTP Basic auth, desktop-site toggle, share/copy link.
+  with a compact header that scrolls away while reading, pull-to-refresh,
+  loading progress, per-site back navigation, file uploads, HTTP Basic
+  auth, desktop-site toggle, share/copy link.
 - Sessions that stick: cookies, localStorage, IndexedDB and cache are
   persisted per app and flushed on exit. Settings has an explicit
   "clear cookies & site data" button — nothing is ever cleared silently.
@@ -18,7 +20,8 @@ inside the app — sign in once and the session survives restarts.
   a lightweight probe of your own service (toggleable in Settings).
 - LAN-first: plain http:// addresses work, and self-signed certificates
   show a one-time "Trust anyway" dialog remembered per host.
-- Material 3 design, dark/light/system theme, edge-to-edge.
+- Material 3 with four themes: System, Dark, Light, and AMOLED (pure black
+  background and surfaces for battery saving on OLED screens).
 - Zero telemetry. No analytics SDKs, no CDN fonts or icons, no external
   calls of any kind except to the services you add yourself.
 

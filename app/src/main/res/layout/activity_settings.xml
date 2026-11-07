@@ -57,7 +57,8 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="System" />
+                    android:text="System"
+                    android:textSize="12sp" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/themeDark"
@@ -65,7 +66,8 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="Dark" />
+                    android:text="Dark"
+                    android:textSize="12sp" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/themeLight"
@@ -73,7 +75,17 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="Light" />
+                    android:text="Light"
+                    android:textSize="12sp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/themeAmoled"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="AMOLED"
+                    android:textSize="12sp" />
             </com.google.android.material.button.MaterialButtonToggleGroup>
 
             <TextView
