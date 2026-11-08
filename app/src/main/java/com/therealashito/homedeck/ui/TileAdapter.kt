@@ -63,11 +63,14 @@ class TileAdapter(
 
     fun isHeader(position: Int): Boolean = rows.getOrNull(position) is Row.Header
 
-    /** Drag reorder within one category; headers and cross-category refused. */
+    /**
+     * Drag reorder. Headers move their whole folder block past the folder
+     * under the finger; tiles reorder within their own category.
+     */
     fun moveRow(from: Int, to: Int): Boolean {
-        val a = rows.getOrNull(from) ?: return false
-        val b = rows.getOrNull(to) ?: return false
-        if (a !is Row.Item || b !is Row.Item) return false
+        if (rows.getOrNull(from) is Row.Header) return dragHeader(from, to)
+        val a = rows.getOrNull(from) as? Row.Item ?: return false
+        val b = rows.getOrNull(to) as? Row.Item ?: return false
         if (a.tile.category != b.tile.category) return false
         val moved = rows.removeAt(from)
         rows.add(to, moved)
@@ -75,6 +78,19 @@ class TileAdapter(
         swapTiles(a.tile.id, b.tile.id)
         return true
     }
+
+    private fun dragHeader(from: Int, to: Int): Boolean {
+        val steps = Sections.dragSteps(rows, from, to)
+        for ((a, b) in steps) {
+            val row = rows.removeAt(a)
+            rows.add(b, row)
+            notifyItemMoved(a, b)
+        }
+        return steps.isNotEmpty()
+    }
+
+    /** Current folder order as displayed; persisted after drags. */
+    fun headerOrder(): List<String> = rows.filterIsInstance<Row.Header>().map { it.category }
 
     private fun swapTiles(idA: String, idB: String) {
         val ixA = tiles.indexOfFirst { it.id == idA }
@@ -121,6 +137,7 @@ class TileAdapter(
         private val name: TextView = itemView.findViewById(R.id.categoryName)
         private val count: TextView = itemView.findViewById(R.id.categoryCount)
         private val chevron: ImageButton = itemView.findViewById(R.id.chevron)
+        private val moreBtn: ImageButton = itemView.findViewById(R.id.moreBtn)
 
         fun bind(header: Row.Header) {
             name.text = header.category
@@ -128,10 +145,8 @@ class TileAdapter(
             chevron.rotation = if (header.expanded) 180f else 0f
             itemView.setOnClickListener { onHeaderClick(header.category) }
             chevron.setOnClickListener { onHeaderClick(header.category) }
-            itemView.setOnLongClickListener {
-                onHeaderMenu(header.category, it)
-                true
-            }
+            // Long-press is drag-to-reorder; actions live on the tap target.
+            moreBtn.setOnClickListener { onHeaderMenu(header.category, moreBtn) }
         }
     }
 

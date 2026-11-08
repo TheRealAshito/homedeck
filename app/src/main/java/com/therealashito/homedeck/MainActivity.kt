@@ -117,6 +117,7 @@ class MainActivity : ThemedActivity() {
             override fun clearView(rv: RecyclerView, viewHolder: RecyclerView.ViewHolder) {
                 super.clearView(rv, viewHolder)
                 tileStore.save(adapter.tiles)
+                settings.categoryOrder = adapter.headerOrder()
             }
         }).attachToRecyclerView(recycler)
 

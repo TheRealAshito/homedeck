@@ -11,9 +11,10 @@ inside the app — sign in once and the session survives restarts.
   duplicate, edit, remove.
 - Categories: give tiles a category and the dashboard groups them into
   folder rows — tap a folder to expand or collapse it (state is remembered),
-  long-press for "Add service here", "Rename folder", and "Move up"/"Move
-  down" to set your own folder order (persisted; new folders append after
-  yours). Tiles move between folders via the tile menu. Uncategorized tiles
+  hold and drag a folder to move it where you want (the whole folder moves
+  as one unit; the order persists and new folders append after yours). The
+  folder's button has "Add service here", "Rename folder", and
+  "Move up"/"Move down". Tiles move between folders via the tile menu. Uncategorized tiles
   stay on top; without categories the dashboard is the plain flat grid.
 - In-app browser (not your phone's browser): keeps you inside the app,
   with a compact header that scrolls away while reading, pull-to-refresh,
