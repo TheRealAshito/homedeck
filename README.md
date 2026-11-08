@@ -9,6 +9,11 @@ inside the app — sign in once and the session survives restarts.
 - Tile dashboard: name, address, a large emoji icon picked from a 90+ icon
   grid (or the site's own favicon), accent color, drag to reorder,
   duplicate, edit, remove.
+- Categories: give tiles a category and the dashboard groups them into
+  folder rows — tap a folder to expand or collapse it (state is remembered),
+  long-press for "Add service here" and "Rename folder". Tiles move between
+  folders via the tile menu. Uncategorized tiles stay on top; without
+  categories the dashboard is the plain flat grid.
 - In-app browser (not your phone's browser): keeps you inside the app,
   with a compact header that scrolls away while reading, pull-to-refresh,
   loading progress, per-site back navigation, file uploads, HTTP Basic

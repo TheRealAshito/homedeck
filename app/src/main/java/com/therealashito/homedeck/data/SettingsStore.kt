@@ -57,6 +57,25 @@ class SettingsStore(context: Context) {
         get() = prefs.getLong(KEY_LAST_UPDATE_CHECK, 0L)
         set(value) = prefs.edit().putLong(KEY_LAST_UPDATE_CHECK, value).apply()
 
+    /** Dashboard folders the user collapsed; everything else is expanded. */
+    var collapsedCategories: Set<String>
+        get() = prefs.getStringSet(KEY_COLLAPSED, emptySet()) ?: emptySet()
+        set(value) = prefs.edit().putStringSet(KEY_COLLAPSED, value).apply()
+
+    /** Toggles one folder; returns true when it ends up collapsed. */
+    fun toggleCollapsed(category: String): Boolean {
+        val current = collapsedCategories.toMutableSet()
+        val nowCollapsed = if (current.contains(category)) {
+            current.remove(category)
+            false
+        } else {
+            current.add(category)
+            true
+        }
+        collapsedCategories = current
+        return nowCollapsed
+    }
+
     /**
      * Hosts whose certificate the user explicitly accepted in the in-app
      * browser. Only these are exempted from certificate validation anywhere
@@ -91,6 +110,7 @@ class SettingsStore(context: Context) {
         const val KEY_DEBUG = "debug_mode"
         const val KEY_AUTO_UPDATE = "auto_update_check"
         const val KEY_LAST_UPDATE_CHECK = "last_update_check_ms"
+        const val KEY_COLLAPSED = "collapsed_categories"
         const val KEY_TRUSTED_HOSTS = "trusted_hosts"
     }
 }

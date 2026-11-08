@@ -48,6 +48,31 @@ class TileJsonTest {
     }
 
     @Test
+    fun legacyJsonWithoutCategoryParsesWithEmptyCategory() {
+        // Exact shape written by v1.0.0-v1.3.0: no category key.
+        val legacy =
+            "[{\"id\":\"x\",\"name\":\"Old\",\"url\":\"http://old.lan\",\"emoji\":\"\uD83D\uDCE1\",\"color\":2}]"
+        val parsed = TileStore.fromJson(legacy)
+        assertEquals(1, parsed.size)
+        assertEquals("Old", parsed[0].name)
+        assertEquals("", parsed[0].category)
+    }
+
+    @Test
+    fun roundTripPreservesCategory() {
+        val tiles = listOf(
+            Tile(id = "a", name = "A", url = "http://a.lan", category = "Monitoring"),
+            Tile(id = "b", name = "B", url = "http://b.lan", category = "")
+        )
+        assertEquals(tiles, TileStore.fromJson(TileStore.toJson(tiles)))
+    }
+
+    @Test
+    fun defaultTilesAreCategorized() {
+        assertTrue(TileStore.defaultTiles().all { it.category.isNotBlank() })
+    }
+
+    @Test
     fun defaultTilesCoverNamedServices() {
         val defaults = TileStore.defaultTiles()
         assertTrue(defaults.any { it.name == "Uptime Kuma" })

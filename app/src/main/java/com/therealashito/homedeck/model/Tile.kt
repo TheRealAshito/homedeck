@@ -12,7 +12,9 @@ data class Tile(
     val name: String,
     val url: String,
     val emoji: String = "",
-    val colorIndex: Int = 0
+    val colorIndex: Int = 0,
+    /** Optional folder name; blank = uncategorized. Missing in old data. */
+    val category: String = ""
 )
 
 object Urls {

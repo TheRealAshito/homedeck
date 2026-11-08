@@ -4,6 +4,8 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.view.View
+import android.widget.EditText
+import android.widget.LinearLayout
 import android.widget.PopupMenu
 import android.widget.ScrollView
 import android.widget.TextView
@@ -74,11 +76,22 @@ class MainActivity : ThemedActivity() {
 
         adapter = TileAdapter(
             onClick = { tile -> startActivity(WebViewActivity.intent(this, tile)) },
-            onMenu = { tile, anchor -> showTileMenu(tile, anchor) }
+            onMenu = { tile, anchor -> showTileMenu(tile, anchor) },
+            onHeaderClick = { category ->
+                settings.toggleCollapsed(category)
+                adapter.collapsed = settings.collapsedCategories
+                adapter.resubmit()
+            },
+            onHeaderMenu = { category, anchor -> showCategoryMenu(category, anchor) }
         )
 
         val spanCount = maxOf(2, resources.configuration.screenWidthDp / 150)
-        recycler.layoutManager = GridLayoutManager(this, spanCount)
+        val layoutManager = GridLayoutManager(this, spanCount)
+        layoutManager.spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
+            override fun getSpanSize(position: Int): Int =
+                if (adapter.isHeader(position)) spanCount else 1
+        }
+        recycler.layoutManager = layoutManager
         recycler.adapter = adapter
 
         ItemTouchHelper(object : ItemTouchHelper.SimpleCallback(
@@ -90,8 +103,10 @@ class MainActivity : ThemedActivity() {
                 viewHolder: RecyclerView.ViewHolder,
                 target: RecyclerView.ViewHolder
             ): Boolean {
-                adapter.move(viewHolder.bindingAdapterPosition, target.bindingAdapterPosition)
-                return true
+                return adapter.moveRow(
+                    viewHolder.bindingAdapterPosition,
+                    target.bindingAdapterPosition
+                )
             }
 
             override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {
@@ -168,6 +183,7 @@ class MainActivity : ThemedActivity() {
         tiles.addAll(tileStore.load())
         adapter.statusChecksEnabled = settings.statusChecks
         adapter.debugMode = settings.debugMode
+        adapter.collapsed = settings.collapsedCategories
         adapter.submit(tiles)
         emptyState.visibility = if (tiles.isEmpty()) View.VISIBLE else View.GONE
         updateSubtitle()
@@ -217,12 +233,14 @@ class MainActivity : ThemedActivity() {
         popup.menu.add(0, MENU_EDIT, 0, "Edit")
         popup.menu.add(0, MENU_BROWSER, 1, "Open in browser")
         popup.menu.add(0, MENU_DUPLICATE, 2, "Duplicate")
-        popup.menu.add(0, MENU_REMOVE, 3, "Remove")
+        popup.menu.add(0, MENU_CATEGORY, 3, "Move to category")
+        popup.menu.add(0, MENU_REMOVE, 4, "Remove")
         popup.setOnMenuItemClickListener { item ->
             when (item.itemId) {
                 MENU_EDIT -> EditTileActivity.start(this, tile.id)
                 MENU_BROWSER -> openExternally(tile.url)
                 MENU_DUPLICATE -> duplicate(tile)
+                MENU_CATEGORY -> showMoveToCategory(tile)
                 MENU_REMOVE -> confirmRemove(tile)
             }
             true
@@ -273,11 +291,80 @@ class MainActivity : ThemedActivity() {
         setContentView(scroll)
     }
 
+    private fun showCategoryMenu(category: String, anchor: View) {
+        val popup = PopupMenu(this, anchor)
+        popup.menu.add(0, CATEGORY_ADD, 0, "Add service here")
+        popup.menu.add(0, CATEGORY_RENAME, 1, "Rename folder")
+        popup.setOnMenuItemClickListener { item ->
+            when (item.itemId) {
+                CATEGORY_ADD -> EditTileActivity.start(
+                    this, tileId = null, prefillCategory = category
+                )
+                CATEGORY_RENAME -> renameCategory(category)
+            }
+            true
+        }
+        popup.show()
+    }
+
+    private fun renameCategory(category: String) {
+        val input = EditText(this).apply {
+            setText(category)
+            setSelection(category.length)
+            hint = "Folder name"
+        }
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(48, 16, 48, 0)
+            addView(input)
+        }
+        MaterialAlertDialogBuilder(this)
+            .setTitle("Rename folder")
+            .setView(container)
+            .setPositiveButton("Rename") { _, _ ->
+                val newName = input.text.toString().trim()
+                if (newName.isNotEmpty() && newName != category) {
+                    tileStore.save(tileStore.load().map {
+                        if (it.category == category) it.copy(category = newName) else it
+                    })
+                    val collapsedNow = settings.collapsedCategories.toMutableSet()
+                    if (collapsedNow.remove(category)) collapsedNow.add(newName)
+                    settings.collapsedCategories = collapsedNow
+                    reload()
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun showMoveToCategory(tile: Tile) {
+        val categories = tileStore.load()
+            .map { it.category }
+            .filter { it.isNotBlank() }
+            .distinct()
+            .sorted()
+        val options = categories + "No category"
+        MaterialAlertDialogBuilder(this)
+            .setTitle("Move ${tile.name} to")
+            .setItems(options.toTypedArray()) { _, which ->
+                val target = if (which >= categories.size) "" else categories[which]
+                tileStore.save(tileStore.load().map {
+                    if (it.id == tile.id) it.copy(category = target) else it
+                })
+                reload()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
     companion object {
         private const val UPDATE_CHECK_INTERVAL_MS = 24L * 60 * 60 * 1000
+        private const val CATEGORY_ADD = 11
+        private const val CATEGORY_RENAME = 12
         private const val MENU_EDIT = 1
         private const val MENU_BROWSER = 2
         private const val MENU_DUPLICATE = 3
         private const val MENU_REMOVE = 4
+        private const val MENU_CATEGORY = 5
     }
 }

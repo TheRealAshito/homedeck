@@ -42,6 +42,7 @@ class TileStore(context: Context) {
                 o.put("url", t.url)
                 o.put("emoji", t.emoji)
                 o.put("color", t.colorIndex)
+                o.put("category", t.category)
                 arr.put(o)
             }
             return arr.toString()
@@ -66,7 +67,8 @@ class TileStore(context: Context) {
                         name = name,
                         url = url,
                         emoji = o.optString("emoji"),
-                        colorIndex = o.optInt("color", 0)
+                        colorIndex = o.optInt("color", 0),
+                        category = o.optString("category")
                     )
                 )
             }
@@ -75,12 +77,12 @@ class TileStore(context: Context) {
 
         /** Starter deck; every tile is editable/removable in the app. */
         fun defaultTiles(): List<Tile> = listOf(
-            Tile(name = "Uptime Kuma", url = "http://kuma.lan", emoji = "📡", colorIndex = 3),
-            Tile(name = "Speedtest Tracker", url = "http://speedtest-tracker.lan", emoji = "⏱️", colorIndex = 5),
-            Tile(name = "Terminal", url = "http://terminal.lan", emoji = "⌨️", colorIndex = 1),
-            Tile(name = "Portainer", url = "http://portainer.lan", emoji = "🚀", colorIndex = 0),
-            Tile(name = "Grafana", url = "http://grafana.lan", emoji = "📊", colorIndex = 4),
-            Tile(name = "Home Assistant", url = "http://homeassistant.lan", emoji = "🏠", colorIndex = 2)
+            Tile(name = "Uptime Kuma", url = "http://kuma.lan", emoji = "\uD83D\uDCE1", colorIndex = 3, category = "Monitoring"),
+            Tile(name = "Speedtest Tracker", url = "http://speedtest-tracker.lan", emoji = "\u23F1\uFE0F", colorIndex = 5, category = "Monitoring"),
+            Tile(name = "Grafana", url = "http://grafana.lan", emoji = "\uD83D\uDCCA", colorIndex = 4, category = "Monitoring"),
+            Tile(name = "Terminal", url = "http://terminal.lan", emoji = "\u2328\uFE0F", colorIndex = 1, category = "Infrastructure"),
+            Tile(name = "Portainer", url = "http://portainer.lan", emoji = "\uD83D\uDE80", colorIndex = 0, category = "Infrastructure"),
+            Tile(name = "Home Assistant", url = "http://homeassistant.lan", emoji = "\uD83C\uDFE0", colorIndex = 2, category = "Home")
         )
     }
 }

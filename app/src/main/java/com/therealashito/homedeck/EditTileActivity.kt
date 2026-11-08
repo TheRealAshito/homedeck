@@ -5,6 +5,8 @@ import android.content.Intent
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.view.View
+import android.widget.ArrayAdapter
+import android.widget.AutoCompleteTextView
 import android.widget.LinearLayout
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
@@ -31,6 +33,7 @@ class EditTileActivity : ThemedActivity() {
     private lateinit var urlLayout: TextInputLayout
     private lateinit var nameInput: TextInputEditText
     private lateinit var urlInput: TextInputEditText
+    private lateinit var categoryInput: AutoCompleteTextView
     private lateinit var emojiBtn: MaterialButton
     private lateinit var colorRow: LinearLayout
     private lateinit var deleteBtn: MaterialButton
@@ -50,9 +53,19 @@ class EditTileActivity : ThemedActivity() {
         urlLayout = findViewById(R.id.urlLayout)
         nameInput = findViewById(R.id.nameInput)
         urlInput = findViewById(R.id.urlInput)
+        categoryInput = findViewById(R.id.categoryInput)
         emojiBtn = findViewById(R.id.emojiBtn)
         colorRow = findViewById(R.id.colorRow)
         deleteBtn = findViewById(R.id.deleteBtn)
+
+        val existingCategories = tileStore.load()
+            .map { it.category }
+            .filter { it.isNotBlank() }
+            .distinct()
+            .sorted()
+        categoryInput.setAdapter(
+            ArrayAdapter(this, android.R.layout.simple_list_item_1, existingCategories)
+        )
 
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.root)) { v, insets ->
             val bars = insets.getInsets(
@@ -68,6 +81,7 @@ class EditTileActivity : ThemedActivity() {
             toolbar.title = "Edit service"
             nameInput.setText(existing.name)
             urlInput.setText(existing.url)
+            categoryInput.setText(existing.category)
             emoji = existing.emoji
             colorIndex = existing.colorIndex
             deleteBtn.visibility = View.VISIBLE
@@ -75,6 +89,7 @@ class EditTileActivity : ThemedActivity() {
             toolbar.title = "Add service"
             nameInput.setText(intent.getStringExtra(EXTRA_PREFILL_NAME).orEmpty())
             urlInput.setText(intent.getStringExtra(EXTRA_PREFILL_URL).orEmpty())
+            categoryInput.setText(intent.getStringExtra(EXTRA_PREFILL_CATEGORY).orEmpty())
             colorIndex = tileStore.load().size % Palette.accents.size
         }
         renderEmoji()
@@ -119,7 +134,8 @@ class EditTileActivity : ThemedActivity() {
             name = name,
             url = url,
             emoji = emoji,
-            colorIndex = colorIndex
+            colorIndex = colorIndex,
+            category = categoryInput.text?.toString()?.trim().orEmpty()
         )
         val tiles = tileStore.load()
         val index = tiles.indexOfFirst { it.id == tile.id }
@@ -177,17 +193,20 @@ class EditTileActivity : ThemedActivity() {
         const val EXTRA_TILE_ID = "extra_tile_id"
         const val EXTRA_PREFILL_NAME = "extra_prefill_name"
         const val EXTRA_PREFILL_URL = "extra_prefill_url"
+        const val EXTRA_PREFILL_CATEGORY = "extra_prefill_category"
 
         fun start(
             context: Context,
             tileId: String? = null,
             prefillName: String? = null,
-            prefillUrl: String? = null
+            prefillUrl: String? = null,
+            prefillCategory: String? = null
         ) {
             val intent = Intent(context, EditTileActivity::class.java)
             tileId?.let { intent.putExtra(EXTRA_TILE_ID, it) }
             prefillName?.let { intent.putExtra(EXTRA_PREFILL_NAME, it) }
             prefillUrl?.let { intent.putExtra(EXTRA_PREFILL_URL, it) }
+            prefillCategory?.let { intent.putExtra(EXTRA_PREFILL_CATEGORY, it) }
             context.startActivity(intent)
         }
     }
