@@ -27,10 +27,24 @@ sealed class Row {
  */
 object Rows {
 
-    fun build(tiles: List<Tile>, collapsed: Set<String>): List<Row> {
+    /**
+     * Display order for the categories present in [tiles]: entries from
+     * [order] first (in that order), then any new categories in
+     * first-appearance order. Entries in [order] with no tiles are ignored.
+     */
+    fun effectiveOrder(tiles: List<Tile>, order: List<String>): List<String> {
+        val present = tiles.map { it.category }.filter { it.isNotBlank() }.distinct()
+        return order.filter { it in present } + present.filter { it !in order }
+    }
+
+    fun build(
+        tiles: List<Tile>,
+        collapsed: Set<String>,
+        order: List<String> = emptyList()
+    ): List<Row> {
         val rows = mutableListOf<Row>()
         rows += tiles.filter { it.category.isBlank() }.map { Row.Item(it) }
-        val categories = tiles.map { it.category }.filter { it.isNotBlank() }.distinct()
+        val categories = effectiveOrder(tiles, order)
         for (category in categories) {
             val items = tiles.filter { it.category == category }
             val expanded = category !in collapsed

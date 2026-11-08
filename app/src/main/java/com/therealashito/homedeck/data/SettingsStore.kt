@@ -62,6 +62,28 @@ class SettingsStore(context: Context) {
         get() = prefs.getStringSet(KEY_COLLAPSED, emptySet()) ?: emptySet()
         set(value) = prefs.edit().putStringSet(KEY_COLLAPSED, value).apply()
 
+    /**
+     * User-chosen folder order (JSON array). Empty = first-appearance order;
+     * categories not listed keep first-appearance order after the listed ones.
+     */
+    var categoryOrder: List<String>
+        get() = try {
+            val raw = prefs.getString(KEY_ORDER, null).orEmpty()
+            if (raw.isEmpty()) {
+                emptyList()
+            } else {
+                val arr = org.json.JSONArray(raw)
+                (0 until arr.length()).map { arr.getString(it) }
+            }
+        } catch (e: Exception) {
+            emptyList()
+        }
+        set(value) {
+            val arr = org.json.JSONArray()
+            value.forEach { arr.put(it) }
+            prefs.edit().putString(KEY_ORDER, arr.toString()).apply()
+        }
+
     /** Toggles one folder; returns true when it ends up collapsed. */
     fun toggleCollapsed(category: String): Boolean {
         val current = collapsedCategories.toMutableSet()
@@ -111,6 +133,7 @@ class SettingsStore(context: Context) {
         const val KEY_AUTO_UPDATE = "auto_update_check"
         const val KEY_LAST_UPDATE_CHECK = "last_update_check_ms"
         const val KEY_COLLAPSED = "collapsed_categories"
+        const val KEY_ORDER = "category_order"
         const val KEY_TRUSTED_HOSTS = "trusted_hosts"
     }
 }

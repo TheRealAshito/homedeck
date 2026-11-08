@@ -27,6 +27,7 @@ import com.therealashito.homedeck.debug.AppLog
 import com.therealashito.homedeck.model.Tile
 import com.therealashito.homedeck.net.StatusChecker
 import com.therealashito.homedeck.net.UpdateChecker
+import com.therealashito.homedeck.ui.Rows
 import com.therealashito.homedeck.ui.TileAdapter
 import java.util.UUID
 import java.util.concurrent.Executors
@@ -184,6 +185,7 @@ class MainActivity : ThemedActivity() {
         adapter.statusChecksEnabled = settings.statusChecks
         adapter.debugMode = settings.debugMode
         adapter.collapsed = settings.collapsedCategories
+        adapter.order = settings.categoryOrder
         adapter.submit(tiles)
         emptyState.visibility = if (tiles.isEmpty()) View.VISIBLE else View.GONE
         updateSubtitle()
@@ -295,16 +297,34 @@ class MainActivity : ThemedActivity() {
         val popup = PopupMenu(this, anchor)
         popup.menu.add(0, CATEGORY_ADD, 0, "Add service here")
         popup.menu.add(0, CATEGORY_RENAME, 1, "Rename folder")
+        popup.menu.add(0, CATEGORY_UP, 2, "Move up")
+        popup.menu.add(0, CATEGORY_DOWN, 3, "Move down")
         popup.setOnMenuItemClickListener { item ->
             when (item.itemId) {
                 CATEGORY_ADD -> EditTileActivity.start(
                     this, tileId = null, prefillCategory = category
                 )
                 CATEGORY_RENAME -> renameCategory(category)
+                CATEGORY_UP -> moveCategory(category, -1)
+                CATEGORY_DOWN -> moveCategory(category, +1)
             }
             true
         }
         popup.show()
+    }
+
+    /** Moves one folder up/down in the persisted order and persists the
+     *  full current display order so new folders keep their place. */
+    private fun moveCategory(category: String, delta: Int) {
+        val current = Rows.effectiveOrder(tiles, settings.categoryOrder)
+        val index = current.indexOf(category)
+        val target = index + delta
+        if (index < 0 || target < 0 || target >= current.size) return
+        val newOrder = current.toMutableList()
+        newOrder.removeAt(index)
+        newOrder.add(target, category)
+        settings.categoryOrder = newOrder
+        reload()
     }
 
     private fun renameCategory(category: String) {
@@ -330,6 +350,9 @@ class MainActivity : ThemedActivity() {
                     val collapsedNow = settings.collapsedCategories.toMutableSet()
                     if (collapsedNow.remove(category)) collapsedNow.add(newName)
                     settings.collapsedCategories = collapsedNow
+                    settings.categoryOrder = settings.categoryOrder.map {
+                        if (it == category) newName else it
+                    }
                     reload()
                 }
             }
@@ -361,6 +384,8 @@ class MainActivity : ThemedActivity() {
         private const val UPDATE_CHECK_INTERVAL_MS = 24L * 60 * 60 * 1000
         private const val CATEGORY_ADD = 11
         private const val CATEGORY_RENAME = 12
+        private const val CATEGORY_UP = 13
+        private const val CATEGORY_DOWN = 14
         private const val MENU_EDIT = 1
         private const val MENU_BROWSER = 2
         private const val MENU_DUPLICATE = 3

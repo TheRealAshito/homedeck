@@ -34,6 +34,7 @@ class TileAdapter(
     private val rows = mutableListOf<Row>()
     val statuses = mutableMapOf<String, StatusChecker.Probe>()
     var collapsed: Set<String> = emptySet()
+    var order: List<String> = emptyList()
     var statusChecksEnabled = true
     var debugMode = false
 
@@ -45,7 +46,7 @@ class TileAdapter(
 
     /** Rebuilds rows from [tiles] + [collapsed] with item animations. */
     fun resubmit() {
-        val newRows = Rows.build(tiles, collapsed)
+        val newRows = Rows.build(tiles, collapsed, order)
         val diff = DiffUtil.calculateDiff(object : DiffUtil.Callback() {
             override fun getOldListSize(): Int = rows.size
             override fun getNewListSize(): Int = newRows.size
