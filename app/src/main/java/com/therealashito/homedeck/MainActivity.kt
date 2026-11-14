@@ -24,6 +24,7 @@ import com.google.android.material.snackbar.Snackbar
 import com.therealashito.homedeck.data.SettingsStore
 import com.therealashito.homedeck.data.TileStore
 import com.therealashito.homedeck.debug.AppLog
+import com.therealashito.homedeck.debug.SessionJournal
 import com.therealashito.homedeck.model.Tile
 import com.therealashito.homedeck.net.StatusChecker
 import com.therealashito.homedeck.net.UpdateChecker
@@ -188,6 +189,9 @@ class MainActivity : ThemedActivity() {
         adapter.collapsed = settings.collapsedCategories
         adapter.order = settings.categoryOrder
         adapter.submit(tiles)
+        for (tile in tiles) {
+            SessionJournal.recordUrl(this, tile.url)
+        }
         emptyState.visibility = if (tiles.isEmpty()) View.VISIBLE else View.GONE
         updateSubtitle()
         refreshStatuses()

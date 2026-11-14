@@ -9,6 +9,8 @@ import android.graphics.Bitmap
 import android.net.Uri
 import android.net.http.SslError
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.Message
 import android.view.View
 import android.webkit.CookieManager
@@ -39,6 +41,7 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.progressindicator.LinearProgressIndicator
 import com.therealashito.homedeck.data.SettingsStore
 import com.therealashito.homedeck.debug.AppLog
+import com.therealashito.homedeck.debug.SessionJournal
 import com.therealashito.homedeck.model.Tile
 import com.therealashito.homedeck.model.Urls
 
@@ -62,6 +65,16 @@ class WebViewActivity : ThemedActivity() {
     private var originalUserAgent: String = DEFAULT_UA
     private var desktopUserAgent: String = DEFAULT_UA
     private var pendingFileCallback: ValueCallback<Array<Uri>>? = null
+
+    /** Persists cookies every minute so an unclean process kill loses at
+     *  most a minute of session state instead of everything since launch. */
+    private val flushHandler = Handler(Looper.getMainLooper())
+    private val flushTick = object : Runnable {
+        override fun run() {
+            CookieManager.getInstance().flush()
+            flushHandler.postDelayed(this, 60_000)
+        }
+    }
 
     private val fileChooserLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -234,10 +247,13 @@ class WebViewActivity : ThemedActivity() {
     override fun onResume() {
         super.onResume()
         webview.onResume()
+        flushHandler.post(flushTick)
     }
 
     override fun onPause() {
+        flushHandler.removeCallbacks(flushTick)
         CookieManager.getInstance().flush()
+        SessionJournal.recordUrl(this, entryUrl)
         webview.onPause()
         super.onPause()
     }

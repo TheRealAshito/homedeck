@@ -93,6 +93,19 @@ class DiagnosticsRunner(private val context: Context) {
             }
         }
 
+        results += check("Session", "Session continuity") {
+            val snap = SessionJournal.snapshot(context)
+            val losses = snap.values.sumOf { it.losses }
+            val hosts = snap.filterValues { it.losses > 0 }.keys
+            when {
+                snap.isEmpty() -> DiagResult.Status.INFO to "no history yet"
+                losses == 0 -> DiagResult.Status.PASS to
+                    "no cookie losses recorded across ${snap.size} service(s)"
+                else -> DiagResult.Status.WARN to
+                    "$losses cookie loss(es): ${hosts.joinToString(", ")} - see log tail for times"
+            }
+        }
+
         results += check("Session", "WebView engine") { checkWebView() }
 
         if (includeNetwork) {
