@@ -17,6 +17,8 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.materialswitch.MaterialSwitch
+import com.therealashito.homedeck.data.CredentialStore
+import com.therealashito.homedeck.data.SessionKeeper
 import com.therealashito.homedeck.data.SettingsStore
 import com.therealashito.homedeck.debug.AppLog
 import com.therealashito.homedeck.net.UpdateChecker
@@ -81,6 +83,13 @@ class SettingsActivity : ThemedActivity() {
         cacheSwitch.isChecked = settings.cacheFirst
         cacheSwitch.setOnCheckedChangeListener { _, checked -> settings.cacheFirst = checked }
 
+        val permanentSessionsSwitch = findViewById<MaterialSwitch>(R.id.permanentSessionsSwitch)
+        permanentSessionsSwitch.isChecked = settings.permanentSessions
+        permanentSessionsSwitch.setOnCheckedChangeListener { _, checked ->
+            settings.permanentSessions = checked
+            AppLog.i("Settings", "permanent sessions=$checked")
+        }
+
         val autoUpdateSwitch = findViewById<MaterialSwitch>(R.id.autoUpdateSwitch)
         autoUpdateSwitch.isChecked = settings.autoUpdateCheck
         autoUpdateSwitch.setOnCheckedChangeListener { _, checked ->
@@ -136,8 +145,22 @@ class SettingsActivity : ThemedActivity() {
         findViewById<MaterialButton>(R.id.clearDataBtn).setOnClickListener {
             MaterialAlertDialogBuilder(this)
                 .setTitle("Clear cookies & site data?")
-                .setMessage("Every service will ask you to sign in again. Tiles and settings are kept.")
+                .setMessage("Every service will ask you to sign in again (unless a saved login is stored). Tiles, settings and saved logins are kept.")
                 .setPositiveButton("Clear") { _, _ -> clearBrowsingData() }
+                .setNegativeButton("Cancel", null)
+                .show()
+        }
+
+        findViewById<MaterialButton>(R.id.clearLoginsBtn).setOnClickListener {
+            val store = CredentialStore(this)
+            val count = store.count()
+            MaterialAlertDialogBuilder(this)
+                .setTitle("Clear saved logins?")
+                .setMessage("Removes $count saved auto-login credential(s) from this device. Active cookies are not touched.")
+                .setPositiveButton("Clear") { _, _ ->
+                    store.clearAll()
+                    Toast.makeText(this, "Saved logins cleared", Toast.LENGTH_SHORT).show()
+                }
                 .setNegativeButton("Cancel", null)
                 .show()
         }
@@ -160,6 +183,7 @@ class SettingsActivity : ThemedActivity() {
 
     private fun clearBrowsingData() {
         AppLog.i("Settings", "clearing cookies and site data")
+        SessionKeeper.clearAll(this)
         val cookieManager = CookieManager.getInstance()
         cookieManager.removeAllCookies(null)
         cookieManager.flush()

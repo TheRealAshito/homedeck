@@ -51,4 +51,12 @@ class UrlsTest {
         assertEquals(443, Urls.defaultPort("https"))
         assertEquals(80, Urls.defaultPort(null))
     }
+
+    @Test
+    fun originOfKeepsNonDefaultPortAndStripsPath() {
+        assertEquals("http://192.168.1.10:3000", Urls.originOf("http://192.168.1.10:3000/login"))
+        assertEquals("http://192.168.1.10:8080", Urls.originOf("192.168.1.10:8080/dashboard"))
+        assertEquals("http://securo.lan", Urls.originOf("http://securo.lan:80/app"))
+        assertEquals("https://mood.lan", Urls.originOf("https://mood.lan:443/journal"))
+    }
 }

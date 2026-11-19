@@ -55,4 +55,16 @@ class StatusCheckerTest {
         assertEquals("connection refused", probe.detail)
         assertTrue(probe.elapsedMs >= 0)
     }
+
+    @Test
+    fun extractSetCookiesFindsCaseInsensitiveHeaders() {
+        val headers = mapOf<String?, List<String>>(
+            null to listOf("HTTP/1.1 200 OK"),
+            "set-cookie" to listOf("sid=abc123; Path=/; HttpOnly"),
+            "Set-Cookie" to listOf("refresh=xyz; Path=/", ""),
+            "Content-Type" to listOf("text/html")
+        )
+        val extracted = StatusChecker.extractSetCookies(headers)
+        assertEquals(listOf("sid=abc123; Path=/; HttpOnly", "refresh=xyz; Path=/"), extracted)
+    }
 }

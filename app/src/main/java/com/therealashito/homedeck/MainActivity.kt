@@ -22,6 +22,7 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
 import com.google.android.material.snackbar.Snackbar
 import com.therealashito.homedeck.data.SettingsStore
+import com.therealashito.homedeck.data.SessionKeeper
 import com.therealashito.homedeck.data.TileStore
 import com.therealashito.homedeck.debug.AppLog
 import com.therealashito.homedeck.debug.SessionJournal
@@ -189,7 +190,12 @@ class MainActivity : ThemedActivity() {
         adapter.collapsed = settings.collapsedCategories
         adapter.order = settings.categoryOrder
         adapter.submit(tiles)
+        val keepPermanent = settings.permanentSessions
         for (tile in tiles) {
+            if (keepPermanent) {
+                SessionKeeper.restoreIfMissing(this, tile.url)
+                SessionKeeper.immortalizeCookies(this, tile.url)
+            }
             SessionJournal.recordUrl(this, tile.url)
         }
         emptyState.visibility = if (tiles.isEmpty()) View.VISIBLE else View.GONE
@@ -221,9 +227,18 @@ class MainActivity : ThemedActivity() {
         swipe.isRefreshing = true
         val remaining = AtomicInteger(snapshot.size)
         val trusted = settings.trustedHosts()
+        val keepPermanent = settings.permanentSessions
         for (tile in snapshot) {
             statusExecutor.execute {
-                val status = StatusChecker.probe(tile.url, trusted)
+                val cookieHeader = if (keepPermanent) {
+                    SessionKeeper.getCookieHeaderForProbe(this, tile.url)
+                } else {
+                    null
+                }
+                val status = StatusChecker.probe(tile.url, trusted, cookieHeader = cookieHeader)
+                if (keepPermanent && status.setCookies.isNotEmpty()) {
+                    SessionKeeper.applyServerSetCookies(this, tile.url, status.setCookies)
+                }
                 runOnUiThread {
                     adapter.setStatus(tile.id, status)
                     if (remaining.decrementAndGet() == 0) {

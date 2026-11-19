@@ -15,6 +15,7 @@ import android.os.Message
 import android.view.View
 import android.webkit.CookieManager
 import android.webkit.HttpAuthHandler
+import android.webkit.JavascriptInterface
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.SslErrorHandler
 import android.webkit.ValueCallback
@@ -39,6 +40,9 @@ import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.progressindicator.LinearProgressIndicator
+import com.google.android.material.snackbar.Snackbar
+import com.therealashito.homedeck.data.CredentialStore
+import com.therealashito.homedeck.data.SessionKeeper
 import com.therealashito.homedeck.data.SettingsStore
 import com.therealashito.homedeck.debug.AppLog
 import com.therealashito.homedeck.debug.SessionJournal
@@ -53,6 +57,7 @@ import com.therealashito.homedeck.model.Urls
 class WebViewActivity : ThemedActivity() {
 
     private lateinit var settings: SettingsStore
+    private lateinit var credentialStore: CredentialStore
     private lateinit var toolbar: MaterialToolbar
     private lateinit var progress: LinearProgressIndicator
     private lateinit var swipe: SwipeRefreshLayout
@@ -65,6 +70,8 @@ class WebViewActivity : ThemedActivity() {
     private var originalUserAgent: String = DEFAULT_UA
     private var desktopUserAgent: String = DEFAULT_UA
     private var pendingFileCallback: ValueCallback<Array<Uri>>? = null
+    private val lastAutoSubmitByOrigin = mutableMapOf<String, Long>()
+    private val triedHttpAuth = mutableSetOf<String>()
 
     /** Persists cookies every minute so an unclean process kill loses at
      *  most a minute of session state instead of everything since launch. */
@@ -72,6 +79,11 @@ class WebViewActivity : ThemedActivity() {
     private val flushTick = object : Runnable {
         override fun run() {
             CookieManager.getInstance().flush()
+            if (settings.permanentSessions) {
+                val activeUrl = webview.url ?: entryUrl
+                SessionKeeper.immortalizeCookies(this@WebViewActivity, activeUrl)
+                captureDomStorage(activeUrl)
+            }
             flushHandler.postDelayed(this, 60_000)
         }
     }
@@ -89,6 +101,7 @@ class WebViewActivity : ThemedActivity() {
         enableEdgeToEdge()
         setContentView(R.layout.activity_webview)
         settings = SettingsStore(this)
+        credentialStore = CredentialStore(this)
 
         entryUrl = intent.getStringExtra(EXTRA_URL) ?: run { finish(); return }
         initialName = intent.getStringExtra(EXTRA_NAME) ?: Urls.hostOf(entryUrl)
@@ -128,6 +141,9 @@ class WebViewActivity : ThemedActivity() {
         })
 
         setupWebview()
+        if (settings.permanentSessions) {
+            SessionKeeper.restoreIfMissing(this, entryUrl)
+        }
         webview.loadUrl(entryUrl)
     }
 
@@ -162,6 +178,7 @@ class WebViewActivity : ThemedActivity() {
             setAcceptThirdPartyCookies(webview, true)
         }
 
+        webview.addJavascriptInterface(AuthBridge(), "HomedeckAuth")
         webview.webChromeClient = ChromeClient()
         webview.webViewClient = SiteClient()
     }
@@ -177,6 +194,7 @@ class WebViewActivity : ThemedActivity() {
                 webview.settings.useWideViewPort = !desktopMode
                 webview.reload()
             }
+            R.id.action_saved_login -> showSavedLoginDialog(currentUrl)
             R.id.action_add_dashboard -> EditTileActivity.start(
                 this,
                 tileId = null,
@@ -186,6 +204,101 @@ class WebViewActivity : ThemedActivity() {
             R.id.action_open_external -> openExternally(currentUrl)
             R.id.action_copy_link -> copyLink(currentUrl)
             R.id.action_share -> share(currentUrl)
+        }
+    }
+
+    private fun showSavedLoginDialog(url: String) {
+        val origin = Urls.originOf(url)
+        val existing = credentialStore.getForUrl(url)
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(64, 24, 64, 0)
+        }
+        val userField = EditText(this).apply {
+            hint = "Username / Email (optional)"
+            setText(existing?.username.orEmpty())
+        }
+        val passField = EditText(this).apply {
+            hint = "Password"
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or
+                android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+            setText(existing?.password.orEmpty())
+        }
+        container.addView(userField)
+        container.addView(passField)
+
+        val builder = MaterialAlertDialogBuilder(this)
+            .setTitle("Permanent login for ${Urls.hostOf(url)}")
+            .setMessage("Automatically signs back in if $origin ever expires your session.")
+            .setView(container)
+            .setPositiveButton("Save & Sign In") { _, _ ->
+                val user = userField.text.toString().trim()
+                val pass = passField.text.toString()
+                if (user.isEmpty() && pass.isEmpty()) {
+                    credentialStore.removeForUrl(url)
+                    Toast.makeText(this, "Saved login removed", Toast.LENGTH_SHORT).show()
+                } else {
+                    credentialStore.saveForUrl(url, user, pass, autoSubmit = true)
+                    Toast.makeText(this, "Saved permanent login", Toast.LENGTH_SHORT).show()
+                    maybeAutoLogin(url, forceSubmit = true)
+                }
+            }
+            .setNegativeButton("Cancel", null)
+        if (existing != null) {
+            builder.setNeutralButton("Clear") { _, _ ->
+                credentialStore.removeForUrl(url)
+                Toast.makeText(this, "Saved login cleared", Toast.LENGTH_SHORT).show()
+            }
+        }
+        builder.show()
+    }
+
+    private fun captureDomStorage(url: String) {
+        if (!settings.permanentSessions) return
+        try {
+            webview.evaluateJavascript(SessionKeeper.buildStorageCaptureJs()) { raw ->
+                SessionKeeper.saveCapturedDomStorage(this, url, raw)
+            }
+        } catch (_: Throwable) {
+        }
+    }
+
+    private fun restoreDomStorage(url: String) {
+        if (!settings.permanentSessions) return
+        val script = SessionKeeper.buildRestoreDomStorageScript(this, url) ?: return
+        try {
+            webview.evaluateJavascript(script, null)
+        } catch (_: Throwable) {
+        }
+    }
+
+    private fun maybeAutoLogin(url: String, forceSubmit: Boolean) {
+        if (!settings.permanentSessions && !forceSubmit) return
+        val cred = credentialStore.getForUrl(url) ?: return
+        val origin = Urls.originOf(url)
+        val now = System.currentTimeMillis()
+        val lastSubmit = lastAutoSubmitByOrigin[origin] ?: 0L
+        val shouldSubmit = forceSubmit || (cred.autoSubmit && (now - lastSubmit >= AUTO_SUBMIT_COOLDOWN_MS))
+        val js = CredentialStore.buildAutoLoginJs(cred.username, cred.password, shouldSubmit)
+        try {
+            webview.evaluateJavascript(js) { rawResult ->
+                val outcome = SessionKeeper.unwrapEvalResult(rawResult) ?: return@evaluateJavascript
+                when (outcome) {
+                    "SUBMITTED" -> {
+                        lastAutoSubmitByOrigin[origin] = System.currentTimeMillis()
+                        AppLog.i("AuthVault", "auto-signed in on $origin")
+                        Toast.makeText(
+                            this,
+                            "Auto-signed in to ${Urls.hostOf(url)}",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                    "FILLED" -> {
+                        AppLog.d("AuthVault", "pre-filled login on $origin")
+                    }
+                }
+            }
+        } catch (_: Throwable) {
         }
     }
 
@@ -236,6 +349,9 @@ class WebViewActivity : ThemedActivity() {
             .setPositiveButton("Sign in") { _, _ ->
                 val user = userField.text.toString()
                 val pass = passField.text.toString()
+                if (settings.permanentSessions && (user.isNotBlank() || pass.isNotBlank())) {
+                    credentialStore.saveForUrl(webview.url ?: entryUrl, user, pass)
+                }
                 webview.setHttpAuthUsernamePassword(host, realm, user, pass)
                 handler.proceed(user, pass)
             }
@@ -252,6 +368,11 @@ class WebViewActivity : ThemedActivity() {
 
     override fun onPause() {
         flushHandler.removeCallbacks(flushTick)
+        val activeUrl = webview.url ?: entryUrl
+        if (settings.permanentSessions) {
+            SessionKeeper.immortalizeCookies(this, activeUrl)
+            captureDomStorage(activeUrl)
+        }
         CookieManager.getInstance().flush()
         SessionJournal.recordUrl(this, entryUrl)
         webview.onPause()
@@ -259,9 +380,40 @@ class WebViewActivity : ThemedActivity() {
     }
 
     override fun onDestroy() {
+        flushHandler.removeCallbacksAndMessages(null)
         webview.stopLoading()
         webview.destroy()
         super.onDestroy()
+    }
+
+    inner class AuthBridge {
+        @JavascriptInterface
+        fun onLoginSubmitted(pageUrl: String?, username: String?, password: String?) {
+            val pass = password ?: return
+            if (pass.isEmpty()) return
+            val user = username?.trim().orEmpty()
+            runOnUiThread {
+                if (!settings.permanentSessions) return@runOnUiThread
+                val targetUrl = pageUrl?.takeIf { it.isNotBlank() } ?: (webview.url ?: entryUrl)
+                val existing = credentialStore.getForUrl(targetUrl)
+                if (existing != null && existing.username == user && existing.password == pass) {
+                    return@runOnUiThread
+                }
+                val host = Urls.hostOf(targetUrl)
+                Snackbar.make(
+                    findViewById(R.id.root),
+                    "Save login for permanent sign-in on $host?",
+                    Snackbar.LENGTH_LONG
+                ).setDuration(10_000).setAction("Save") {
+                    credentialStore.saveForUrl(targetUrl, user, pass, autoSubmit = true)
+                    Toast.makeText(
+                        this@WebViewActivity,
+                        "Saved permanent login for $host",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }.show()
+            }
+        }
     }
 
     inner class ChromeClient : WebChromeClient() {
@@ -324,6 +476,38 @@ class WebViewActivity : ThemedActivity() {
             swipe.isRefreshing = false
             AppLog.d("WebView", "page started: $url")
             if (settings.debugMode) toolbar.subtitle = url
+            if (settings.permanentSessions && !url.isNullOrBlank()) {
+                SessionKeeper.restoreIfMissing(this@WebViewActivity, url)
+                restoreDomStorage(url)
+            }
+        }
+
+        override fun onPageFinished(view: WebView, url: String?) {
+            val activeUrl = url?.takeIf { it.isNotBlank() } ?: return
+            if (settings.permanentSessions) {
+                SessionKeeper.immortalizeCookies(this@WebViewActivity, activeUrl)
+                restoreDomStorage(activeUrl)
+                try {
+                    view.evaluateJavascript(CredentialStore.buildCaptureHookJs(), null)
+                } catch (_: Throwable) {
+                }
+                maybeAutoLogin(activeUrl, forceSubmit = false)
+                // Second pass for SPAs (React/Vue/Svelte) that mount login inputs
+                // or populate localStorage/sessionStorage asynchronously after load.
+                flushHandler.postDelayed({
+                    if (!isFinishing && !isDestroyed) {
+                        val current = webview.url ?: activeUrl
+                        SessionKeeper.immortalizeCookies(this@WebViewActivity, current)
+                        captureDomStorage(current)
+                        try {
+                            webview.evaluateJavascript(CredentialStore.buildCaptureHookJs(), null)
+                        } catch (_: Throwable) {
+                        }
+                        maybeAutoLogin(current, forceSubmit = false)
+                    }
+                }, 900)
+            }
+            SessionJournal.recordUrl(this@WebViewActivity, activeUrl)
         }
 
         override fun onReceivedError(
@@ -374,6 +558,18 @@ class WebViewActivity : ThemedActivity() {
                 handler.proceed(stored[0], stored[1])
                 return
             }
+            if (settings.permanentSessions) {
+                val saved = credentialStore.getForUrl(view.url ?: entryUrl)
+                val authKey = "$host|$realm"
+                if (saved != null && (saved.username.isNotEmpty() || saved.password.isNotEmpty()) &&
+                    triedHttpAuth.add(authKey)
+                ) {
+                    view.setHttpAuthUsernamePassword(host, realm, saved.username, saved.password)
+                    handler.proceed(saved.username, saved.password)
+                    AppLog.i("WebView", "auto-answered HTTP auth for $host")
+                    return
+                }
+            }
             AppLog.i("WebView", "http auth challenge for $host")
             showHttpAuthDialog(handler, host, realm)
         }
@@ -391,6 +587,7 @@ class WebViewActivity : ThemedActivity() {
     companion object {
         const val EXTRA_URL = "extra_url"
         const val EXTRA_NAME = "extra_name"
+        private const val AUTO_SUBMIT_COOLDOWN_MS = 15_000L
 
         private const val DEFAULT_UA =
             "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 " +

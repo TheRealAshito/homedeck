@@ -20,9 +20,26 @@ inside the app — sign in once and the session survives restarts.
   with a compact header that scrolls away while reading, pull-to-refresh,
   loading progress, per-site back navigation, file uploads, HTTP Basic
   auth, desktop-site toggle, share/copy link.
-- Sessions that stick: cookies, localStorage, IndexedDB and cache are
-  persisted per app and flushed on exit. Settings has an explicit
-  "clear cookies & site data" button — nothing is ever cleared silently.
+- Sessions that stick (4-layer permanent login suite):
+  1. **Immortal cookies**: promotes ephemeral session cookies (which Android's
+     WebView normally wipes whenever the app process restarts) to 1-year
+     persistent cookies and mirrors them in a local backup store so missing
+     cookies are restored before a service loads or probes.
+  2. **DOM storage backup**: snapshots `localStorage` and `sessionStorage`
+     per origin (`scheme://host[:port]`) and re-hydrates missing tokens when
+     reopening a service, so SPAs that keep JWTs in `sessionStorage` or
+     `localStorage` stay signed in across restarts.
+  3. **Authenticated keep-alive probes**: status probes attach your active
+     session cookies and feed valid `Set-Cookie` renewals back into the cookie
+     jar, keeping sliding server-side sessions alive even when you haven't
+     opened a tile in days.
+  4. **Encrypted auto-relogin vault**: optionally save a username/password per
+     service (either via the in-browser **"Save login?"** prompt when signing
+     in, the in-browser **"Saved login…"** menu, or in **Edit service**). If a
+     Docker container restarts or forces a re-login, Homedeck automatically
+     fills and submits the login form (or HTTP Basic Auth challenge) for you.
+  Settings has separate buttons to clear cookies/site data or clear saved
+  logins — nothing is ever cleared silently.
 - Live status dots: each tile shows Online / Reachable / Offline based on
   a lightweight probe of your own service (toggleable in Settings).
 - LAN-first: plain http:// addresses work, and self-signed certificates

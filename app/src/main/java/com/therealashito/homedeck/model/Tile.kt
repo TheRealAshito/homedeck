@@ -44,6 +44,30 @@ object Urls {
         url
     }
 
+    /**
+     * Normalized origin (scheme://host or scheme://host:port when non-default)
+     * so multiple Docker containers on different ports of the same host keep
+     * isolated session storage and auto-login credentials.
+     */
+    fun originOf(url: String): String = try {
+        val normalized = normalize(url) ?: url
+        val uri = URI(normalized)
+        val scheme = uri.scheme?.lowercase() ?: "http"
+        val host = uri.host?.lowercase()
+        if (host.isNullOrBlank()) {
+            url
+        } else {
+            val port = uri.port
+            if (port > 0 && port != defaultPort(scheme)) {
+                "$scheme://$host:$port"
+            } else {
+                "$scheme://$host"
+            }
+        }
+    } catch (e: Exception) {
+        hostOf(url)
+    }
+
     fun defaultPort(scheme: String?): Int = when (scheme?.lowercase()) {
         "https" -> 443
         else -> 80

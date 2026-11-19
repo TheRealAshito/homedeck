@@ -29,13 +29,32 @@ object StatusChecker {
 
     enum class Status { ONLINE, DEGRADED, OFFLINE, UNKNOWN }
 
-    data class Probe(val status: Status, val detail: String, val elapsedMs: Long)
+    data class Probe(
+        val status: Status,
+        val detail: String,
+        val elapsedMs: Long,
+        val setCookies: List<String> = emptyList()
+    )
 
     /** Pure classification, unit tested. 4xx still means "service is up". */
     fun classify(code: Int): Status = when {
         code in 200..499 -> Status.ONLINE
         code >= 500 -> Status.DEGRADED
         else -> Status.UNKNOWN
+    }
+
+    /** Extracts Set-Cookie headers (case-insensitive) from response headers. */
+    fun extractSetCookies(headers: Map<String?, List<String>>?): List<String> {
+        if (headers == null) return emptyList()
+        val out = mutableListOf<String>()
+        for ((key, values) in headers) {
+            if (key != null && key.equals("Set-Cookie", ignoreCase = true)) {
+                for (v in values) {
+                    if (v.isNotBlank()) out.add(v)
+                }
+            }
+        }
+        return out
     }
 
     /** Plain-language reason for a failed probe, unit tested. */
@@ -51,7 +70,8 @@ object StatusChecker {
     fun probe(
         url: String,
         trustedHosts: Set<String> = emptySet(),
-        timeoutMs: Int = 3000
+        timeoutMs: Int = 3000,
+        cookieHeader: String? = null
     ): Probe {
         val started = System.currentTimeMillis()
         var failure: Exception? = null
@@ -64,13 +84,22 @@ object StatusChecker {
             conn.instanceFollowRedirects = true
             conn.requestMethod = "GET"
             conn.setRequestProperty("User-Agent", "Homedeck/1.0 (Android)")
+            if (!cookieHeader.isNullOrBlank()) {
+                conn.setRequestProperty("Cookie", cookieHeader)
+            }
             if (permissive && conn is javax.net.ssl.HttpsURLConnection) {
                 conn.sslSocketFactory = permissiveSslFactory()
                 conn.hostnameVerifier = permissiveHostnameVerifier
             }
             try {
                 val code = conn.responseCode
-                return Probe(classify(code), "HTTP $code", System.currentTimeMillis() - started)
+                val setCookies = extractSetCookies(conn.headerFields)
+                return Probe(
+                    classify(code),
+                    "HTTP $code",
+                    System.currentTimeMillis() - started,
+                    setCookies
+                )
             } finally {
                 conn.disconnect()
             }

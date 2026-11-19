@@ -16,6 +16,11 @@
         app:showAsAction="never" />
 
     <item
+        android:id="@+id/action_saved_login"
+        android:title="Saved login\u2026"
+        app:showAsAction="never" />
+
+    <item
         android:id="@+id/action_add_dashboard"
         android:title="Add this page to dashboard"
         app:showAsAction="never" />

@@ -36,6 +36,16 @@ class SettingsStore(context: Context) {
         set(value) = prefs.edit().putBoolean(KEY_CACHE_FIRST, value).apply()
 
     /**
+     * Permanent sessions: promotes session cookies to 1-year persistent
+     * cookies, backs up localStorage/sessionStorage, attaches cookies to
+     * status probes so sliding sessions stay alive, and auto-signs back in
+     * using saved logins when a service shows a login form.
+     */
+    var permanentSessions: Boolean
+        get() = prefs.getBoolean(KEY_PERMANENT_SESSIONS, true)
+        set(value) = prefs.edit().putBoolean(KEY_PERMANENT_SESSIONS, value).apply()
+
+    /**
      * Debug mode: verbose per-service detail, logging, and a startup guard
      * that keeps the app open with a stack trace instead of crash-looping.
      * Defaults to ON for the early development phase.
@@ -129,6 +139,7 @@ class SettingsStore(context: Context) {
         const val KEY_UI_THEME = "ui_theme"
         const val KEY_STATUS_CHECKS = "status_checks"
         const val KEY_CACHE_FIRST = "cache_first"
+        const val KEY_PERMANENT_SESSIONS = "permanent_sessions"
         const val KEY_DEBUG = "debug_mode"
         const val KEY_AUTO_UPDATE = "auto_update_check"
         const val KEY_LAST_UPDATE_CHECK = "last_update_check_ms"

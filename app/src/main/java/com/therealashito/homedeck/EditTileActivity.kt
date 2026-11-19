@@ -18,6 +18,7 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
+import com.therealashito.homedeck.data.CredentialStore
 import com.therealashito.homedeck.data.TileStore
 import com.therealashito.homedeck.model.Tile
 import com.therealashito.homedeck.model.Urls
@@ -29,11 +30,14 @@ import java.util.UUID
 class EditTileActivity : ThemedActivity() {
 
     private lateinit var tileStore: TileStore
+    private lateinit var credentialStore: CredentialStore
     private lateinit var nameLayout: TextInputLayout
     private lateinit var urlLayout: TextInputLayout
     private lateinit var nameInput: TextInputEditText
     private lateinit var urlInput: TextInputEditText
     private lateinit var categoryInput: AutoCompleteTextView
+    private lateinit var loginUserInput: TextInputEditText
+    private lateinit var loginPassInput: TextInputEditText
     private lateinit var emojiBtn: MaterialButton
     private lateinit var colorRow: LinearLayout
     private lateinit var deleteBtn: MaterialButton
@@ -47,6 +51,7 @@ class EditTileActivity : ThemedActivity() {
         enableEdgeToEdge()
         setContentView(R.layout.activity_edit_tile)
         tileStore = TileStore(this)
+        credentialStore = CredentialStore(this)
 
         val toolbar = findViewById<MaterialToolbar>(R.id.toolbar)
         nameLayout = findViewById(R.id.nameLayout)
@@ -54,6 +59,8 @@ class EditTileActivity : ThemedActivity() {
         nameInput = findViewById(R.id.nameInput)
         urlInput = findViewById(R.id.urlInput)
         categoryInput = findViewById(R.id.categoryInput)
+        loginUserInput = findViewById(R.id.loginUserInput)
+        loginPassInput = findViewById(R.id.loginPassInput)
         emojiBtn = findViewById(R.id.emojiBtn)
         colorRow = findViewById(R.id.colorRow)
         deleteBtn = findViewById(R.id.deleteBtn)
@@ -82,14 +89,27 @@ class EditTileActivity : ThemedActivity() {
             nameInput.setText(existing.name)
             urlInput.setText(existing.url)
             categoryInput.setText(existing.category)
+            val cred = credentialStore.getForUrl(existing.url)
+            if (cred != null) {
+                loginUserInput.setText(cred.username)
+                loginPassInput.setText(cred.password)
+            }
             emoji = existing.emoji
             colorIndex = existing.colorIndex
             deleteBtn.visibility = View.VISIBLE
         } else {
             toolbar.title = "Add service"
+            val prefillUrl = intent.getStringExtra(EXTRA_PREFILL_URL).orEmpty()
             nameInput.setText(intent.getStringExtra(EXTRA_PREFILL_NAME).orEmpty())
-            urlInput.setText(intent.getStringExtra(EXTRA_PREFILL_URL).orEmpty())
+            urlInput.setText(prefillUrl)
             categoryInput.setText(intent.getStringExtra(EXTRA_PREFILL_CATEGORY).orEmpty())
+            if (prefillUrl.isNotBlank()) {
+                val cred = credentialStore.getForUrl(prefillUrl)
+                if (cred != null) {
+                    loginUserInput.setText(cred.username)
+                    loginPassInput.setText(cred.password)
+                }
+            }
             colorIndex = tileStore.load().size % Palette.accents.size
         }
         renderEmoji()
@@ -141,6 +161,14 @@ class EditTileActivity : ThemedActivity() {
         val index = tiles.indexOfFirst { it.id == tile.id }
         if (index >= 0) tiles[index] = tile else tiles.add(tile)
         tileStore.save(tiles)
+
+        val loginUser = loginUserInput.text?.toString()?.trim().orEmpty()
+        val loginPass = loginPassInput.text?.toString().orEmpty()
+        if (loginUser.isEmpty() && loginPass.isEmpty()) {
+            credentialStore.removeForUrl(url)
+        } else {
+            credentialStore.saveForUrl(url, loginUser, loginPass, autoSubmit = true)
+        }
         finish()
     }
 

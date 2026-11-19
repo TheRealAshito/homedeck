@@ -6,6 +6,8 @@ import android.os.Handler
 import android.os.Looper
 import android.webkit.CookieManager
 import android.webkit.WebView
+import com.therealashito.homedeck.data.CredentialStore
+import com.therealashito.homedeck.data.SessionKeeper
 import com.therealashito.homedeck.data.SettingsStore
 import com.therealashito.homedeck.data.TileStore
 import com.therealashito.homedeck.model.Urls
@@ -106,12 +108,35 @@ class DiagnosticsRunner(private val context: Context) {
             }
         }
 
+        results += check("Session", "Permanent session vault") {
+            val (cookieOrigins, storageOrigins) = SessionKeeper.summary(context)
+            val savedLogins = CredentialStore(context).count()
+            if (!settings.permanentSessions) {
+                DiagResult.Status.WARN to "permanent sessions switched off in Settings"
+            } else {
+                DiagResult.Status.PASS to
+                    "$cookieOrigins immortal cookie backup(s), $storageOrigins DOM storage backup(s), $savedLogins saved auto-login(s)"
+            }
+        }
+
         results += check("Session", "WebView engine") { checkWebView() }
 
         if (includeNetwork) {
             for (tile in tileStore.load()) {
                 results += check("Services", tile.name) {
-                    val probe = StatusChecker.probe(tile.url, settings.trustedHosts())
+                    val cookieHeader = if (settings.permanentSessions) {
+                        SessionKeeper.getCookieHeaderForProbe(context, tile.url)
+                    } else {
+                        null
+                    }
+                    val probe = StatusChecker.probe(
+                        tile.url,
+                        settings.trustedHosts(),
+                        cookieHeader = cookieHeader
+                    )
+                    if (settings.permanentSessions && probe.setCookies.isNotEmpty()) {
+                        SessionKeeper.applyServerSetCookies(context, tile.url, probe.setCookies)
+                    }
                     val status = when (probe.status) {
                         StatusChecker.Status.ONLINE -> DiagResult.Status.PASS
                         StatusChecker.Status.DEGRADED -> DiagResult.Status.WARN

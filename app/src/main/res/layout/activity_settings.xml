@@ -180,6 +180,40 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
+                        android:text="Permanent sessions"
+                        android:textAppearance="?attr/textAppearanceTitleMedium"
+                        android:textColor="?attr/colorOnSurface" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Promotes session cookies to 1-year persistence, backs up localStorage &amp; sessionStorage, sends cookies on probes, and auto-signs back in using saved logins."
+                        android:textAppearance="?attr/textAppearanceBodySmall"
+                        android:textColor="?attr/colorOnSurfaceVariant" />
+                </LinearLayout>
+
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/permanentSessionsSwitch"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="18dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
                         android:text="Debug mode"
                         android:textAppearance="?attr/textAppearanceTitleMedium"
                         android:textColor="?attr/colorOnSurface" />
@@ -298,6 +332,17 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="10dp"
                 android:text="Clear cookies &amp; site data"
+                android:textColor="?attr/colorError"
+                app:icon="@drawable/ic_delete"
+                app:iconTint="?attr/colorError" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/clearLoginsBtn"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="Clear saved logins"
                 android:textColor="?attr/colorError"
                 app:icon="@drawable/ic_delete"
                 app:iconTint="?attr/colorError" />
