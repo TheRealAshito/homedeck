@@ -19,6 +19,7 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
 import com.therealashito.homedeck.data.CredentialStore
+import com.therealashito.homedeck.data.SessionKeeper
 import com.therealashito.homedeck.data.TileStore
 import com.therealashito.homedeck.model.Tile
 import com.therealashito.homedeck.model.Urls
@@ -159,8 +160,17 @@ class EditTileActivity : ThemedActivity() {
         )
         val tiles = tileStore.load()
         val index = tiles.indexOfFirst { it.id == tile.id }
+        val previousUrl = if (index >= 0) tiles[index].url else null
         if (index >= 0) tiles[index] = tile else tiles.add(tile)
         tileStore.save(tiles)
+
+        if (previousUrl != null) {
+            val oldOrigin = Urls.originOf(previousUrl)
+            val newOrigin = Urls.originOf(url)
+            if (oldOrigin != newOrigin && tiles.none { Urls.originOf(it.url) == oldOrigin }) {
+                credentialStore.removeForUrl(previousUrl)
+            }
+        }
 
         val loginUser = loginUserInput.text?.toString()?.trim().orEmpty()
         val loginPass = loginPassInput.text?.toString().orEmpty()
@@ -179,7 +189,17 @@ class EditTileActivity : ThemedActivity() {
             .setPositiveButton("Remove") { _, _ ->
                 val id = existingId
                 if (id != null) {
-                    tileStore.save(tileStore.load().filterNot { it.id == id })
+                    val all = tileStore.load()
+                    val removed = all.firstOrNull { it.id == id }
+                    val remaining = all.filterNot { it.id == id }
+                    tileStore.save(remaining)
+                    if (removed != null) {
+                        val origin = Urls.originOf(removed.url)
+                        if (remaining.none { Urls.originOf(it.url) == origin }) {
+                            SessionKeeper.clearForUrl(this, removed.url)
+                            credentialStore.removeForUrl(removed.url)
+                        }
+                    }
                 }
                 finish()
             }

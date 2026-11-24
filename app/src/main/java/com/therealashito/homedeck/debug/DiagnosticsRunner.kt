@@ -168,8 +168,6 @@ class DiagnosticsRunner(private val context: Context) {
         return results
     }
 
-    private fun crashDir(): File = File(context.filesDir, "crash")
-
     private fun appVersionLine(): String = try {
         val info = context.packageManager.getPackageInfo(context.packageName, 0)
         "${info.versionName ?: "?"} (code ${info.longVersionCode})"

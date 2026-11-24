@@ -176,6 +176,7 @@ class TileAdapter(
 
             if (tile.emoji.isBlank()) {
                 emojiChip.visibility = View.INVISIBLE
+                favicon.setImageDrawable(null)
                 favicon.visibility = View.GONE
                 FaviconLoader.load(itemView.context, tile.url) { bitmap: Bitmap? ->
                     val position = bindingAdapterPosition

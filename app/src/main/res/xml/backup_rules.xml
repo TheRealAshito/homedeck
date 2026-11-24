@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <exclude domain="sharedpref" path="homedeck.credentials.xml" />
+    <exclude domain="sharedpref" path="homedeck.session_keeper.xml" />
+    <exclude domain="sharedpref" path="homedeck.session.xml" />
+</full-backup-content>

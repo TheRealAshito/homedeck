@@ -76,4 +76,19 @@ class SessionKeeperTest {
         assertEquals("new", merged.getString("jwt"))
         assertEquals("keep_me", merged.getString("refresh"))
     }
+
+    @Test
+    fun setCookieNameExtractsCookieIdentifier() {
+        assertEquals("sid", SessionKeeper.setCookieName("sid=abc; Path=/; HttpOnly"))
+        assertEquals("csrftoken", SessionKeeper.setCookieName(" csrftoken = ; Max-Age=0"))
+        assertNull(SessionKeeper.setCookieName("=broken"))
+    }
+
+    @Test
+    fun storageRestoreJsUsesJsonParseAndCaptureJsIncludesOrigin() {
+        val restoreJs = SessionKeeper.buildStorageRestoreJs("""{"k":"v\u2028x"}""", null)
+        assertTrue(restoreJs.contains("JSON.parse("))
+        val captureJs = SessionKeeper.buildStorageCaptureJs()
+        assertTrue(captureJs.contains("origin: window.location.origin"))
+    }
 }

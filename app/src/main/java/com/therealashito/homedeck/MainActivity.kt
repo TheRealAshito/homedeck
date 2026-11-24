@@ -21,6 +21,7 @@ import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
 import com.google.android.material.snackbar.Snackbar
+import com.therealashito.homedeck.data.CredentialStore
 import com.therealashito.homedeck.data.SettingsStore
 import com.therealashito.homedeck.data.SessionKeeper
 import com.therealashito.homedeck.data.TileStore
@@ -190,12 +191,7 @@ class MainActivity : ThemedActivity() {
         adapter.collapsed = settings.collapsedCategories
         adapter.order = settings.categoryOrder
         adapter.submit(tiles)
-        val keepPermanent = settings.permanentSessions
         for (tile in tiles) {
-            if (keepPermanent) {
-                SessionKeeper.restoreIfMissing(this, tile.url)
-                SessionKeeper.immortalizeCookies(this, tile.url)
-            }
             SessionJournal.recordUrl(this, tile.url)
         }
         emptyState.visibility = if (tiles.isEmpty()) View.VISIBLE else View.GONE
@@ -230,6 +226,9 @@ class MainActivity : ThemedActivity() {
         val keepPermanent = settings.permanentSessions
         for (tile in snapshot) {
             statusExecutor.execute {
+                if (keepPermanent) {
+                    SessionKeeper.restoreIfMissing(this, tile.url)
+                }
                 val cookieHeader = if (keepPermanent) {
                     SessionKeeper.getCookieHeaderForProbe(this, tile.url)
                 } else {
@@ -292,7 +291,13 @@ class MainActivity : ThemedActivity() {
             .setTitle("Remove ${tile.name}?")
             .setMessage("Only the shortcut is removed. The service itself is not affected.")
             .setPositiveButton("Remove") { _, _ ->
-                tileStore.save(tileStore.load().filterNot { it.id == tile.id })
+                val remaining = tileStore.load().filterNot { it.id == tile.id }
+                tileStore.save(remaining)
+                val origin = com.therealashito.homedeck.model.Urls.originOf(tile.url)
+                if (remaining.none { com.therealashito.homedeck.model.Urls.originOf(it.url) == origin }) {
+                    SessionKeeper.clearForUrl(this, tile.url)
+                    CredentialStore(this).removeForUrl(tile.url)
+                }
                 reload()
             }
             .setNegativeButton("Cancel", null)

@@ -2,6 +2,7 @@ package com.therealashito.homedeck.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.os.Build
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
@@ -88,26 +89,25 @@ class CredentialStore(context: Context) {
         val enc = prefs.getString(KEY_VAULT_ENC, null)
         val ivB64 = prefs.getString(KEY_VAULT_IV, null)
         if (!enc.isNullOrBlank() && !ivB64.isNullOrBlank()) {
-            try {
-                val key = getOrCreateSecretKey()
-                if (key != null) {
-                    val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-                    val iv = Base64.decode(ivB64, Base64.NO_WRAP)
-                    val ciphertext = Base64.decode(enc, Base64.NO_WRAP)
-                    cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, iv))
-                    return cipher.doFinal(ciphertext).decodeToString()
-                }
+            return try {
+                val key = getOrCreateSecretKey() ?: return null
+                val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+                val iv = Base64.decode(ivB64, Base64.NO_WRAP)
+                val ciphertext = Base64.decode(enc, Base64.NO_WRAP)
+                cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, iv))
+                cipher.doFinal(ciphertext).decodeToString()
             } catch (t: Throwable) {
-                AppLog.w("AuthVault", "keystore decrypt failed, falling back: ${t.message}")
+                AppLog.w("AuthVault", "keystore decrypt failed: ${t.message}")
+                null
             }
         }
-        return prefs.getString(KEY_VAULT_PLAIN, null)
+        return if (isRobolectric()) prefs.getString(KEY_VAULT_PLAIN, null) else null
     }
 
     private fun writeEncryptedJson(json: String) {
-        try {
-            val key = getOrCreateSecretKey()
-            if (key != null) {
+        val key = getOrCreateSecretKey()
+        if (key != null) {
+            try {
                 val cipher = Cipher.getInstance("AES/GCM/NoPadding")
                 cipher.init(Cipher.ENCRYPT_MODE, key)
                 val ciphertext = cipher.doFinal(json.encodeToByteArray())
@@ -119,12 +119,20 @@ class CredentialStore(context: Context) {
                     .remove(KEY_VAULT_PLAIN)
                     .apply()
                 return
+            } catch (t: Throwable) {
+                AppLog.e("AuthVault", "keystore encrypt failed; refusing plaintext write", t)
+                return
             }
-        } catch (_: Throwable) {
-            // Headless JVM / Robolectric environment without AndroidKeyStore.
         }
-        prefs.edit().putString(KEY_VAULT_PLAIN, json).apply()
+        if (isRobolectric()) {
+            prefs.edit().putString(KEY_VAULT_PLAIN, json).apply()
+        } else {
+            AppLog.e("AuthVault", "AndroidKeyStore unavailable; refusing plaintext credential write")
+        }
     }
+
+    private fun isRobolectric(): Boolean =
+        Build.FINGERPRINT.equals("robolectric", ignoreCase = true)
 
     private fun getOrCreateSecretKey(): SecretKey? = try {
         val ks = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
@@ -197,24 +205,21 @@ class CredentialStore(context: Context) {
         }
 
         /**
-         * Matches exact origin (`scheme://host[:port]`) first so different
-         * Docker containers on different ports stay isolated; falls back to
-         * matching host only if there is a single credential for that host.
+         * Matches exact origin (`scheme://host[:port]`) strictly so different
+         * Docker containers on different ports stay isolated and HTTPS
+         * credentials are never leaked to plaintext HTTP endpoints.
          */
         fun matchForUrl(map: Map<String, Credential>, url: String): Credential? {
             if (map.isEmpty()) return null
-            val origin = Urls.originOf(url)
-            map[origin]?.let { return it }
-            val host = Urls.hostOf(url).lowercase()
-            val byHost = map.values.filter { Urls.hostOf(it.origin).lowercase() == host }
-            return if (byHost.size == 1) byHost.first() else null
+            return map[Urls.originOf(url)]
         }
 
         /**
-         * JS snippet that detects a visible password login form on the current
-         * page, fills the username & password using the native HTMLInputElement
-         * setter (so React/Vue/Svelte state updates properly), and optionally
-         * submits the form.
+         * JS snippet that detects a single visible login password field (never
+         * multi-field registration/change-password forms), fills username and
+         * password with React/Vue `_valueTracker` synchronization, and
+         * optionally submits via SPA-safe handlers (never raw `form.submit()`
+         * which forces full-page reloads on SPAs).
          *
          * Returns `"NO_FORM"`, `"FILLED"`, or `"SUBMITTED"`.
          */
@@ -243,6 +248,7 @@ class CredentialStore(context: Context) {
                         function setNativeValue(el, val) {
                             if (!el) return;
                             el.focus();
+                            var lastVal = el.value;
                             var proto = Object.getPrototypeOf(el);
                             var desc = Object.getOwnPropertyDescriptor(proto, 'value') ||
                                 Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
@@ -251,6 +257,9 @@ class CredentialStore(context: Context) {
                             } else {
                                 el.value = val;
                             }
+                            if (el._valueTracker && typeof el._valueTracker.setValue === 'function') {
+                                el._valueTracker.setValue(lastVal);
+                            }
                             el.dispatchEvent(new Event('input', { bubbles: true }));
                             el.dispatchEvent(new Event('change', { bubbles: true }));
                         }
@@ -258,9 +267,19 @@ class CredentialStore(context: Context) {
                         var passInputs = Array.prototype.slice.call(
                             document.querySelectorAll('input[type="password"]')
                         ).filter(isVisible);
-                        if (passInputs.length === 0) return "NO_FORM";
+                        // Only single-password forms are logins; >=2 means register/change-password.
+                        if (passInputs.length !== 1) return "NO_FORM";
 
                         var passEl = passInputs[0];
+                        var ac = (passEl.getAttribute('autocomplete') || '').toLowerCase();
+                        var pHint = ((passEl.name || '') + ' ' + (passEl.id || '')).toLowerCase();
+                        if (ac === 'new-password' || /confirm|repeat|new.?pass/i.test(pHint)) {
+                            return "NO_FORM";
+                        }
+                        if (passEl.value && passEl.value.length > 0) {
+                            return "NO_FORM";
+                        }
+
                         var scope = passEl.form || passEl.closest('form, [role="form"], main, body') || document;
 
                         var candidates = Array.prototype.slice.call(
@@ -275,7 +294,7 @@ class CredentialStore(context: Context) {
                         });
 
                         var userEl = candidates.length > 0 ? candidates[0] : null;
-                        if (userEl && userVal) {
+                        if (userEl && userVal && (!userEl.value || userEl.value !== userVal)) {
                             setNativeValue(userEl, userVal);
                         }
                         if (passVal) {
@@ -284,37 +303,38 @@ class CredentialStore(context: Context) {
 
                         if (!shouldSubmit) return "FILLED";
 
-                        var form = passEl.form || passEl.closest('form');
-                        var submitBtn = scope.querySelector(
-                            'button[type="submit"], input[type="submit"]'
-                        );
-                        if (!submitBtn) {
-                            var buttons = Array.prototype.slice.call(
-                                scope.querySelectorAll('button, [role="button"]')
-                            ).filter(isVisible);
-                            for (var i = 0; i < buttons.length; i++) {
-                                var txt = (buttons[i].innerText || buttons[i].textContent || '').trim().toLowerCase();
-                                if (/^(sign\s*in|log\s*in|login|submit|continue|unlock|connect|enter)$/i.test(txt) ||
-                                    txt.indexOf('sign in') !== -1 || txt.indexOf('log in') !== -1 || txt.indexOf('login') !== -1) {
-                                    submitBtn = buttons[i];
-                                    break;
+                        setTimeout(function() {
+                            try {
+                                var form = passEl.form || passEl.closest('form');
+                                var submitBtn = scope.querySelector(
+                                    'button[type="submit"]:not([disabled]), input[type="submit"]:not([disabled])'
+                                );
+                                if (!submitBtn) {
+                                    var buttons = Array.prototype.slice.call(
+                                        scope.querySelectorAll('button, [role="button"]')
+                                    ).filter(function(b) { return !b.disabled && isVisible(b); });
+                                    for (var i = 0; i < buttons.length; i++) {
+                                        var txt = (buttons[i].innerText || buttons[i].textContent || '').trim().toLowerCase();
+                                        if (/^(sign\s*in|log\s*in|login|submit|continue|unlock|connect|enter)$/i.test(txt) ||
+                                            txt.indexOf('sign in') !== -1 || txt.indexOf('log in') !== -1 || txt.indexOf('login') !== -1) {
+                                            submitBtn = buttons[i];
+                                            break;
+                                        }
+                                    }
                                 }
-                            }
-                        }
 
-                        if (submitBtn && isVisible(submitBtn)) {
-                            submitBtn.click();
-                            return "SUBMITTED";
-                        }
-                        if (form) {
-                            if (typeof form.requestSubmit === 'function') {
-                                form.requestSubmit();
-                            } else {
-                                form.submit();
-                            }
-                            return "SUBMITTED";
-                        }
-                        passEl.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+                                if (submitBtn && !submitBtn.disabled && isVisible(submitBtn)) {
+                                    submitBtn.click();
+                                    return;
+                                }
+                                if (form && typeof form.requestSubmit === 'function') {
+                                    form.requestSubmit();
+                                    return;
+                                }
+                                passEl.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+                            } catch (err) {}
+                        }, 80);
+
                         return "SUBMITTED";
                     } catch (e) {
                         return "ERROR:" + e.message;
@@ -325,7 +345,8 @@ class CredentialStore(context: Context) {
 
         /**
          * Idempotent JS hook injected into pages to detect when the user
-         * submits a login form and offer to save the credentials in Homedeck.
+         * submits a login form (not multi-field registration/password-change)
+         * and offer to save the credentials in Homedeck.
          */
         fun buildCaptureHookJs(): String = """
             (function() {
@@ -335,25 +356,30 @@ class CredentialStore(context: Context) {
                 function captureNow() {
                     try {
                         if (!window.HomedeckAuth || typeof window.HomedeckAuth.onLoginSubmitted !== 'function') return;
-                        var passInputs = document.querySelectorAll('input[type="password"]');
-                        for (var i = 0; i < passInputs.length; i++) {
-                            var passEl = passInputs[i];
-                            var passVal = passEl.value || '';
-                            if (!passVal) continue;
-                            var scope = passEl.form || passEl.closest('form, [role="form"], main, body') || document;
-                            var userEl = scope.querySelector(
-                                'input[type="email"], input[autocomplete="username"], ' +
-                                'input[name*="user" i], input[name*="email" i], input[name*="login" i], ' +
-                                'input[id*="user" i], input[id*="email" i], input[id*="login" i], ' +
-                                'input[type="text"], input:not([type])'
-                            );
-                            var userVal = (userEl && userEl !== passEl) ? (userEl.value || '').trim() : '';
-                            var sig = userVal + '\n' + passVal;
-                            if (window.__homedeckLastCaptured === sig) return;
-                            window.__homedeckLastCaptured = sig;
-                            window.HomedeckAuth.onLoginSubmitted(window.location.href, userVal, passVal);
-                            return;
-                        }
+                        var passInputs = Array.prototype.slice.call(
+                            document.querySelectorAll('input[type="password"]')
+                        ).filter(function(el) {
+                            var r = el.getBoundingClientRect();
+                            return r.width > 0 && r.height > 0;
+                        });
+                        if (passInputs.length !== 1) return;
+                        var passEl = passInputs[0];
+                        var ac = (passEl.getAttribute('autocomplete') || '').toLowerCase();
+                        if (ac === 'new-password') return;
+                        var passVal = passEl.value || '';
+                        if (!passVal) return;
+                        var scope = passEl.form || passEl.closest('form, [role="form"], main, body') || document;
+                        var userEl = scope.querySelector(
+                            'input[type="email"], input[autocomplete="username"], ' +
+                            'input[name*="user" i], input[name*="email" i], input[name*="login" i], ' +
+                            'input[id*="user" i], input[id*="email" i], input[id*="login" i], ' +
+                            'input[type="text"], input:not([type])'
+                        );
+                        var userVal = (userEl && userEl !== passEl) ? (userEl.value || '').trim() : '';
+                        var sig = userVal + '\n' + passVal;
+                        if (window.__homedeckLastCaptured === sig) return;
+                        window.__homedeckLastCaptured = sig;
+                        window.HomedeckAuth.onLoginSubmitted(window.location.href, userVal, passVal);
                     } catch (e) {}
                 }
 

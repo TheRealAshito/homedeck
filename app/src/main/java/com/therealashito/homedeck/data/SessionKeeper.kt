@@ -11,16 +11,17 @@ import org.json.JSONTokener
 /**
  * Keeps web sessions alive across app restarts, process kills, and idle gaps:
  *
- * 1. **Immortal cookies**: promotes ephemeral session cookies (which Chromium
- *    wipes whenever Android reclaims the app process) into 1-year persistent
- *    cookies and mirrors them in private preferences so they can be restored
- *    before loading or probing a service.
+ * 1. **Immortal cookies (non-destructive)**: snapshots live cookies and restores
+ *    cookies that vanish across process kills (session-only cookies) before a
+ *    service loads, without overwriting attributes (`HttpOnly`, `SameSite`,
+ *    `Path`, `Domain`) on cookies that are already live in `CookieManager`.
+ *    When a server or page deletes a cookie while open, the backup is synced
+ *    so expired cookies are never resurrected.
  * 2. **DOM storage backup**: snapshots `window.localStorage` and
- *    `window.sessionStorage` (which normally dies when the WebView closes) and
- *    re-hydrates missing keys when the service is opened again.
+ *    `window.sessionStorage` per actual `window.location.origin` and syncs
+ *    deletions so expired auth/crypto keys cannot cause reload loops.
  * 3. **Keep-alive cookie renewal**: feeds valid `Set-Cookie` headers received
- *    during status probes back into the cookie jar so sliding server sessions
- *    do not idle out.
+ *    during status probes back into the cookie jar and honours cookie deletions.
  */
 object SessionKeeper {
 
@@ -104,6 +105,17 @@ object SessionKeeper {
     }
 
     /**
+     * Extracts the cookie name from a `Set-Cookie` header, or null if malformed.
+     */
+    fun setCookieName(rawSetCookie: String): String? {
+        val first = rawSetCookie.substringBefore(';').trim()
+        val eq = first.indexOf('=')
+        if (eq <= 0) return null
+        val name = first.substring(0, eq).trim()
+        return name.ifEmpty { null }
+    }
+
+    /**
      * True when a server `Set-Cookie` header from a keep-alive probe sets or
      * renews a cookie rather than clearing/expiring it.
      */
@@ -170,7 +182,7 @@ object SessionKeeper {
         return merged.toString()
     }
 
-    /** JS expression that serializes `localStorage` and `sessionStorage`. */
+    /** JS expression that serializes `origin`, `localStorage`, and `sessionStorage`. */
     fun buildStorageCaptureJs(): String = """
         (function() {
             try {
@@ -187,7 +199,7 @@ object SessionKeeper {
                         if (sk) s[sk] = sessionStorage.getItem(sk);
                     }
                 }
-                return JSON.stringify({local: l, session: s});
+                return JSON.stringify({origin: window.location.origin, local: l, session: s});
             } catch (e) {
                 return "";
             }
@@ -197,15 +209,17 @@ object SessionKeeper {
     /**
      * JS expression that restores missing keys into `localStorage` and
      * `sessionStorage` without overwriting keys the page already set.
+     * Uses `JSON.parse(JSONObject.quote(...))` so U+2028/U+2029 or control
+     * characters in values never cause JS syntax errors.
      */
     fun buildStorageRestoreJs(localJson: String?, sessionJson: String?): String {
-        val safeLocal = if (localJson.isNullOrBlank()) "{}" else localJson
-        val safeSession = if (sessionJson.isNullOrBlank()) "{}" else sessionJson
+        val quotedLocal = JSONObject.quote(if (localJson.isNullOrBlank()) "{}" else localJson)
+        val quotedSession = JSONObject.quote(if (sessionJson.isNullOrBlank()) "{}" else sessionJson)
         return """
             (function() {
                 try {
-                    var l = $safeLocal;
-                    var s = $safeSession;
+                    var l = JSON.parse($quotedLocal);
+                    var s = JSON.parse($quotedSession);
                     var restored = 0;
                     if (window.localStorage && l) {
                         Object.keys(l).forEach(function(k) {
@@ -233,10 +247,39 @@ object SessionKeeper {
 
     // ---- Android Context integration ----
 
+    /**
+     * Syncs our cookie backup with what is currently live in `CookieManager`
+     * for [url] WITHOUT overwriting existing live cookies (preserving `HttpOnly`,
+     * `SameSite`, `Path`, and `Domain` attributes).
+     *
+     * Because this replaces the backed-up set for [origin], any cookie the
+     * server or app intentionally deleted (e.g. logout / expired session) is
+     * pruned from the backup instead of being resurrected.
+     */
+    @Synchronized
+    fun syncCookiesFromJar(context: Context, url: String) {
+        val origin = Urls.originOf(url)
+        val prefs = prefs(context)
+        val liveRaw = try {
+            CookieManager.getInstance().getCookie(url)
+        } catch (t: Throwable) {
+            return
+        }
+        val live = parseCookies(liveRaw)
+        if (live.isEmpty()) {
+            removeOriginKey(prefs, KEY_COOKIES, origin)
+        } else {
+            saveOriginCookies(prefs, origin, live)
+        }
+    }
+
+    /**
+     * Legacy helper preserved for startup/cold-start paths: snapshots live
+     * cookies without touching already-present cookies in `CookieManager`.
+     */
     @Synchronized
     fun immortalizeCookies(context: Context, url: String) {
         val origin = Urls.originOf(url)
-        val secure = origin.startsWith("https://")
         val prefs = prefs(context)
         val backedUp = loadOriginCookies(prefs, origin)
         val liveRaw = try {
@@ -247,19 +290,15 @@ object SessionKeeper {
         val live = parseCookies(liveRaw)
         val merged = mergeCookies(backedUp, live)
         if (merged.isEmpty()) return
-
         saveOriginCookies(prefs, origin, merged)
-        try {
-            val cm = CookieManager.getInstance()
-            for (header in buildSetCookieHeaders(merged, secure)) {
-                cm.setCookie(origin, header)
-            }
-            cm.flush()
-        } catch (t: Throwable) {
-            // CookieManager may be unavailable in headless tests.
-        }
     }
 
+    /**
+     * Restores ONLY backed-up cookies that are currently missing from
+     * `CookieManager` (for example after an OS process kill wipes session-only
+     * cookies). Should be called on cold open BEFORE loading the service,
+     * never repeatedly mid-navigation.
+     */
     @Synchronized
     fun restoreIfMissing(context: Context, url: String): Int {
         val origin = Urls.originOf(url)
@@ -292,7 +331,6 @@ object SessionKeeper {
 
     @Synchronized
     fun getCookieHeaderForProbe(context: Context, url: String): String? {
-        restoreIfMissing(context, url)
         val liveRaw = try {
             CookieManager.getInstance().getCookie(url)
         } catch (t: Throwable) {
@@ -306,53 +344,81 @@ object SessionKeeper {
 
     @Synchronized
     fun applyServerSetCookies(context: Context, url: String, setCookies: List<String>) {
-        val renewals = setCookies.filter { isRenewalSetCookie(it) }
-        if (renewals.isEmpty()) return
+        if (setCookies.isEmpty()) return
         val origin = Urls.originOf(url)
-        try {
-            val cm = CookieManager.getInstance()
-            for (header in renewals) {
-                cm.setCookie(url, header)
-            }
-            cm.flush()
-        } catch (_: Throwable) {
-        }
-        // Also merge into our backup store directly in case CookieManager isn't loaded.
         val prefs = prefs(context)
         val backedUp = loadOriginCookies(prefs, origin)
-        val incoming = LinkedHashMap<String, String>()
-        for (header in renewals) {
-            val firstPair = header.substringBefore(';')
-            incoming.putAll(parseCookies(firstPair))
+        var backupChanged = false
+
+        val renewals = mutableListOf<String>()
+        for (header in setCookies) {
+            if (isRenewalSetCookie(header)) {
+                renewals.add(header)
+                val firstPair = header.substringBefore(';')
+                backedUp.putAll(parseCookies(firstPair))
+                backupChanged = true
+            } else {
+                // Server explicitly deleted/expired this cookie — prune from backup too.
+                val name = setCookieName(header)
+                if (name != null && backedUp.remove(name) != null) {
+                    backupChanged = true
+                }
+            }
         }
-        val merged = mergeCookies(backedUp, incoming)
-        if (merged.isNotEmpty()) {
-            saveOriginCookies(prefs, origin, merged)
+
+        if (renewals.isNotEmpty()) {
+            try {
+                val cm = CookieManager.getInstance()
+                for (header in renewals) {
+                    cm.setCookie(url, header)
+                }
+                cm.flush()
+            } catch (_: Throwable) {
+            }
         }
-        immortalizeCookies(context, url)
+        if (backupChanged) {
+            if (backedUp.isEmpty()) {
+                removeOriginKey(prefs, KEY_COOKIES, origin)
+            } else {
+                saveOriginCookies(prefs, origin, backedUp)
+            }
+        }
     }
 
+    /**
+     * Replaces the saved DOM storage snapshot for the page's actual origin
+     * (`payload.origin`, falling back to [fallbackUrl]) so keys deleted by the
+     * app stay deleted and never trigger an infinite expired-key reload loop.
+     */
     @Synchronized
-    fun saveCapturedDomStorage(context: Context, url: String, rawEvalResult: String?) {
+    fun saveCapturedDomStorage(context: Context, fallbackUrl: String, rawEvalResult: String?) {
         val unwrapped = unwrapEvalResult(rawEvalResult) ?: return
         val payload = try {
             JSONObject(unwrapped)
         } catch (e: Exception) {
             return
         }
-        val origin = Urls.originOf(url)
+        val payloadOrigin = payload.optString("origin").takeIf {
+            it.startsWith("http://") || it.startsWith("https://")
+        }
+        val origin = Urls.originOf(payloadOrigin ?: fallbackUrl)
         val prefs = prefs(context)
+
         val localObj = payload.optJSONObject("local")
-        if (localObj != null && localObj.length() > 0) {
-            val existing = loadOriginStorage(prefs, KEY_LOCAL_STORAGE, origin)
-            val merged = mergeStorageJson(existing, localObj.toString())
-            saveOriginStorage(prefs, KEY_LOCAL_STORAGE, origin, merged)
+        if (localObj != null) {
+            if (localObj.length() > 0) {
+                saveOriginStorage(prefs, KEY_LOCAL_STORAGE, origin, localObj.toString())
+            } else {
+                removeOriginKey(prefs, KEY_LOCAL_STORAGE, origin)
+            }
         }
         val sessionObj = payload.optJSONObject("session")
-        if (sessionObj != null && sessionObj.length() > 0) {
-            val existing = loadOriginStorage(prefs, KEY_SESSION_STORAGE, origin)
-            val merged = mergeStorageJson(existing, sessionObj.toString())
-            saveOriginStorage(prefs, KEY_SESSION_STORAGE, origin, merged)
+        if (sessionObj != null) {
+            if (sessionObj.length() > 0) {
+                saveOriginStorage(prefs, KEY_SESSION_STORAGE, origin, sessionObj.toString())
+            } else {
+                removeOriginKey(prefs, KEY_SESSION_STORAGE, origin)
+            }
         }
     }
 

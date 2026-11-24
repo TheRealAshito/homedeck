@@ -74,34 +74,52 @@ object StatusChecker {
         cookieHeader: String? = null
     ): Probe {
         val started = System.currentTimeMillis()
-        var failure: Exception? = null
+        val failure: Exception?
         try {
-            val host = Urls.hostOf(url)
-            val permissive = trustedHosts.contains(host)
-            val conn = URL(url).openConnection() as HttpURLConnection
-            conn.connectTimeout = timeoutMs
-            conn.readTimeout = timeoutMs
-            conn.instanceFollowRedirects = true
-            conn.requestMethod = "GET"
-            conn.setRequestProperty("User-Agent", "Homedeck/1.0 (Android)")
-            if (!cookieHeader.isNullOrBlank()) {
-                conn.setRequestProperty("Cookie", cookieHeader)
-            }
-            if (permissive && conn is javax.net.ssl.HttpsURLConnection) {
-                conn.sslSocketFactory = permissiveSslFactory()
-                conn.hostnameVerifier = permissiveHostnameVerifier
-            }
-            try {
-                val code = conn.responseCode
-                val setCookies = extractSetCookies(conn.headerFields)
+            val baseOrigin = Urls.originOf(url)
+            var currentUrl = url
+            var hops = 0
+            while (true) {
+                val host = Urls.hostOf(currentUrl)
+                val permissive = trustedHosts.contains(host)
+                val conn = URL(currentUrl).openConnection() as HttpURLConnection
+                conn.connectTimeout = timeoutMs
+                conn.readTimeout = timeoutMs
+                // Never let HttpURLConnection forward cookies or permissive TLS cross-origin.
+                conn.instanceFollowRedirects = false
+                conn.requestMethod = "GET"
+                conn.setRequestProperty("User-Agent", "Homedeck/1.0 (Android)")
+                if (!cookieHeader.isNullOrBlank() && Urls.originOf(currentUrl) == baseOrigin) {
+                    conn.setRequestProperty("Cookie", cookieHeader)
+                }
+                if (permissive && conn is javax.net.ssl.HttpsURLConnection) {
+                    conn.sslSocketFactory = permissiveSslFactory()
+                    conn.hostnameVerifier = permissiveHostnameVerifier
+                }
+                val code: Int
+                val setCookies: List<String>
+                val location: String?
+                try {
+                    code = conn.responseCode
+                    setCookies = extractSetCookies(conn.headerFields)
+                    location = conn.getHeaderField("Location")
+                } finally {
+                    conn.disconnect()
+                }
+                if (code in 300..399 && !location.isNullOrBlank() && hops < 3) {
+                    val resolved = runCatching { URL(URL(currentUrl), location).toString() }.getOrNull()
+                    if (resolved != null && Urls.originOf(resolved) == baseOrigin) {
+                        currentUrl = resolved
+                        hops++
+                        continue
+                    }
+                }
                 return Probe(
                     classify(code),
                     "HTTP $code",
                     System.currentTimeMillis() - started,
                     setCookies
                 )
-            } finally {
-                conn.disconnect()
             }
         } catch (e: Exception) {
             failure = e

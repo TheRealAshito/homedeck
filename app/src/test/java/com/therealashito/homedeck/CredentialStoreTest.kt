@@ -32,15 +32,15 @@ class CredentialStoreTest {
     }
 
     @Test
-    fun matchForUrlIsolatesDifferentPortsOnSameDockerHost() {
+    fun matchForUrlIsolatesSchemesAndPortsStrictly() {
         val map = mapOf(
             "http://192.168.1.10:3000" to Credential(
                 origin = "http://192.168.1.10:3000",
                 username = "mood_user",
                 password = "p1"
             ),
-            "http://192.168.1.10:8080" to Credential(
-                origin = "http://192.168.1.10:8080",
+            "https://securo.lan" to Credential(
+                origin = "https://securo.lan",
                 username = "securo_user",
                 password = "p2"
             )
@@ -51,16 +51,22 @@ class CredentialStoreTest {
         )
         assertEquals(
             "securo_user",
-            CredentialStore.matchForUrl(map, "http://192.168.1.10:8080/auth")?.username
+            CredentialStore.matchForUrl(map, "https://securo.lan/auth")?.username
         )
+        // Must never downgrade HTTPS credentials to plaintext HTTP or cross ports.
+        assertNull(CredentialStore.matchForUrl(map, "http://securo.lan/auth"))
         assertNull(CredentialStore.matchForUrl(map, "http://192.168.1.10:9000/"))
     }
 
     @Test
-    fun buildAutoLoginJsQuotesSpecialCharactersAndEmbedsSubmitFlag() {
+    fun buildAutoLoginJsGuardsAgainstLoopsAndRawFormSubmit() {
         val js = CredentialStore.buildAutoLoginJs("ashito", "p\"a\\ss", shouldSubmit = true)
         assertTrue(js.contains("\"ashito\""))
         assertTrue(js.contains("\"p\\\"a\\\\ss\""))
         assertTrue(js.contains("var shouldSubmit = true;"))
+        assertTrue(js.contains("passInputs.length !== 1"))
+        assertTrue(js.contains("_valueTracker"))
+        assertTrue(js.contains("requestSubmit"))
+        assertTrue(!js.contains("form.submit()"))
     }
 }

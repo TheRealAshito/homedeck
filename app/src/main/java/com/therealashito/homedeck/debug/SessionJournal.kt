@@ -1,6 +1,7 @@
 package com.therealashito.homedeck.debug
 
 import android.content.Context
+import com.therealashito.homedeck.model.Urls
 import org.json.JSONObject
 
 /**
@@ -55,19 +56,15 @@ object SessionJournal {
         }
     }
 
-    /** Convenience: records cookie presence for the given service URL. */
+    /** Convenience: records cookie presence for the given service URL (keyed by origin). */
     fun recordUrl(context: Context, url: String) {
-        val host = try {
-            java.net.URI(url).host ?: url
-        } catch (e: Exception) {
-            url
-        }
+        val origin = Urls.originOf(url)
         val present = try {
             android.webkit.CookieManager.getInstance().getCookie(url)?.isNotBlank() == true
         } catch (t: Throwable) {
             false
         }
-        record(context, host, present)
+        record(context, origin, present)
     }
 
     @Synchronized
